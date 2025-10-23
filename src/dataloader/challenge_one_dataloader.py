@@ -20,11 +20,17 @@ WFC_ROOT_DIR = "/playpen-ssd/levi/w4c/w4c-25/weather4cast_data"
 
 class Sat2RadDataset(Dataset):
 
-    def __init__(self, split="train", toy_dataset=False):
+    def __init__(
+            self, 
+            split="train",
+            steps_per_epoch:int=100,
+            toy_dataset=False
+        ):
 
         super().__init__()
 
         self.split = split
+        self.steps_per_epoch = steps_per_epoch
 
         if not split in ['train', 'val', 'test']: 
             raise Exception(f"Invalid split: {split}")
@@ -33,19 +39,53 @@ class Sat2RadDataset(Dataset):
         hrit_regex    = f"{WFC_ROOT_DIR}/*/*/HRIT/*{split}*ns.h5"
         hrit_regex_ii = f"{WFC_ROOT_DIR}/*/*/*/HRIT/*{split}*ns.h5"
         
-        all_opera_fps = list(set(glob(opera_regex))) 
+        all_opera_fps = list(set(glob(opera_regex)))
+
+        # please don't judge mighty lord in heaven (:
         all_hrit_fps  = list(set(list(set(glob(hrit_regex))) + list(set(glob(hrit_regex_ii)))))
 
-        opera_fps = []
-        hrit_fps  = []
+        all_fp_dict = {}
+        fp_dict     = {}
 
+        # please don't looooookkk...!!!
         # remove some symlinks
         for op_fp, hr_fp in zip(all_opera_fps, all_hrit_fps):
-            if not Path(op_fp).is_symlink(): opera_fps.append(op_fp)
-            if not Path(hr_fp).is_symlink(): hrit_fps.append(hr_fp)
+            
+            if not Path(op_fp).is_symlink():
 
-        breakpoint()
+                name = Path(op_fp).name
+                name = name.split(".")[0]
+                if name not in all_fp_dict:
+                    all_fp_dict[name] = {
+                        "opera": op_fp,
+                        "hrit" : None,
+                    }
+                else:
+                    all_fp_dict[name]['opera'] = op_fp
 
+            if not Path(hr_fp).is_symlink():
+
+                name = Path(hr_fp).name
+                name = name.split(".")[0]
+
+                if name not in all_fp_dict:
+                    all_fp_dict[name] = {
+                        "opera": None,
+                        "hrit" : hr_fp,
+                    }
+                else:
+                    all_fp_dict[name]['hrit'] = hr_fp
+
+        hrit_fps  = []
+        opera_fps = []
+
+        for k, v in all_fp_dict.items():
+            if v['opera'] != None and v['hrit'] != None: 
+                fp_dict[k] = v
+                hrit_fps.append(v['hrit'])
+                opera_fps.append(v['opera'])
+
+        # NOTE: not implemented
         if toy_dataset:
             opera_fps = opera_fps[:1]
             hrit_fps  = hrit_fps[:1]
@@ -67,6 +107,7 @@ class Sat2RadDataset(Dataset):
                 name = "data" if "data" in f else keys[0]
                 return f[name][:]
 
+        # TODO: horribly slow...
         with ThreadPoolExecutor() as ex:
 
             # OPERA
@@ -87,9 +128,25 @@ class Sat2RadDataset(Dataset):
 
         breakpoint()
 
-    def __len__(): return -1
+    def __len__(self) -> int: 
+        return self.steps_per_epoch
 
-    def __getitem__(self, index):
+    def __getitem__(self, index: int) -> dict:
+
+        # TODO:
+        # 1. sampling proceedure
+            # pick a random OPERA patch that's not too close to a boarder
+            # pick the corresponding
+
+        # input (X)
+        # 1H HRIT satallite context (can be larger); centered about corresponding area of precipitation
+        # - (B, H, W, C, T) -> (B, (32 // 6) + (32 // 6) + 1, 11, 4) -> (B, 6+, 6+, 11, 4)
+
+        # output (y)
+        # OPERA average, hourly cummulative precipitation for 4H; 32x32 pixels
+        # - (B, H, W, C, T) -> (B, 32, 32, 1, 16); layer_last
+        # - regression target: (layer_last).mean() * 4
+
         return {}
 
 
@@ -105,4 +162,4 @@ class ChallengeOneTestSet(Dataset):
     
 
 if __name__ == "__main__":
-    ds = Sat2RadDataset(toy_dataset=True)
+    ds = Sat2RadDataset(toy_dataset=False)
