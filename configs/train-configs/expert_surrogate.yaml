@@ -1,0 +1,40 @@
+global:
+  device: 0
+  mode: train  # ['train', 'eval']
+  formulation: p(y|y_sparse)
+
+model:
+  name: older_surrogate_mh
+  pretrained: True
+  weights: 
+  config:
+
+training:
+  batch_size: 32
+  steps_per_epoch: 64000
+  epochs: 500
+  loss: MSE
+  lr: 1e-5
+  optimizer: Adam
+
+validation:
+  batch_size: 1
+  steps_per_epoch: 256
+  loss: L1
+
+dataset:
+  name: MOS2SefOLDERSurrogate
+  image_size: 512
+  crop_size: 128
+  num_workers: 0
+  masking_ratio: 1
+
+logging:
+  root: "/playpen/mufan/levi/tianlong-chen-lab/material-super-resolution/__exps__/expert-surrogates"
+  exp_name: older-surrogate
+  result_columns: [""]
+  save_weights: true
+  save_only_best_weights: true
+  enable_tensorboard: false
+  log_figures: false
+  log_interval: 100

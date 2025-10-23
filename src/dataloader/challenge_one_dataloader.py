@@ -10,10 +10,12 @@ from concurrent.futures import ThreadPoolExecutor
 
 
 # challenge num.1 is to predict cummulative rainfall from satallite data
-OPERA_TRAIN_DATA_PATH = "weather4cast_data/w4c25/*/OPERA/*.train.*.h5"
-OPERA_VAL_DATA_PATH   = "weather4cast_data/w4c25/*/OPERA/*.val.*.h5"
-HRIT_TRAIN_DATA_PATH  = "weather4cast_data/w4c25/*/HRIT/*.train.*.h5"
-HRIT_VAL_DATA_PATH    = "weather4cast_data/w4c25/*/HRIT/*.val.*.h5"
+WFC_ROOT_DIR = "/playpen-ssd/levi/w4c/w4c-25/weather4cast_data"
+
+# OPERA_TRAIN_DATA_PATH = "weather4cast_data/w4c25/*/OPERA/*.train.*.h5"
+# OPERA_VAL_DATA_PATH   = "weather4cast_data/w4c25/*/OPERA/*.val.*.h5"
+# HRIT_TRAIN_DATA_PATH  = "weather4cast_data/w4c25/*/HRIT/*.train.*.h5"
+# HRIT_VAL_DATA_PATH    = "weather4cast_data/w4c25/*/HRIT/*.val.*.h5"
 
 
 class Sat2RadDataset(Dataset):
@@ -22,20 +24,27 @@ class Sat2RadDataset(Dataset):
 
         super().__init__()
 
-        opera_regex = ""
-        hrit_regex  = ""
+        self.split = split
 
-        if split == "train":
-            opera_regex = OPERA_TRAIN_DATA_PATH
-            hrit_regex  = HRIT_VAL_DATA_PATH
-        elif split == "val":
-            opera_regex = OPERA_VAL_DATA_PATH
-            hrit_regex  = HRIT_VAL_DATA_PATH
-        else:
+        if not split in ['train', 'val', 'test']: 
             raise Exception(f"Invalid split: {split}")
         
-        opera_fps = glob(opera_regex)
-        hrit_fps  = glob(hrit_regex)
+        opera_regex   = f"{WFC_ROOT_DIR}/*/*/OPERA/*{split}*.h5"
+        hrit_regex    = f"{WFC_ROOT_DIR}/*/*/HRIT/*{split}*ns.h5"
+        hrit_regex_ii = f"{WFC_ROOT_DIR}/*/*/*/HRIT/*{split}*ns.h5"
+        
+        all_opera_fps = list(set(glob(opera_regex))) 
+        all_hrit_fps  = list(set(list(set(glob(hrit_regex))) + list(set(glob(hrit_regex_ii)))))
+
+        opera_fps = []
+        hrit_fps  = []
+
+        # remove some symlinks
+        for op_fp, hr_fp in zip(all_opera_fps, all_hrit_fps):
+            if not Path(op_fp).is_symlink(): opera_fps.append(op_fp)
+            if not Path(hr_fp).is_symlink(): hrit_fps.append(hr_fp)
+
+        breakpoint()
 
         if toy_dataset:
             opera_fps = opera_fps[:1]
@@ -48,20 +57,6 @@ class Sat2RadDataset(Dataset):
         # multiband satallite data
         # [B, 1512, 1512, 11, T]
         self.hrit_buffer = []
-
-        # for fp in tqdm(opera_fps, total=len(opera_fps), desc=f"Loading OPERA data..."):
-            
-        #     with h5py.File(fp, "r") as f:
-        #         dataset_name = list(f.keys())[0]
-        #         t = f[dataset_name][:]
-        #         self.opera_buffer.append(t)
-
-        # for fp in tqdm(hrit_fps, total=len(hrit_fps), desc=f"Loading HRIT data..."):
-            
-        #     with h5py.File(fp, "r") as f:
-        #         dataset_name = list(f.keys())[0]
-        #         t = f[dataset_name][:]
-        #         self.hrit_buffer.append(t)
 
         # safe HDF5 read
         def _read_first_dataset(fp: str):

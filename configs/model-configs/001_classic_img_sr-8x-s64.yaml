@@ -1,0 +1,14 @@
+weights_fp: "/playpen/mufan/levi/tianlong-chen-lab/material-super-resolution/_SwinIR/__weights__/001_classicalSR_DF2K_s64w8_SwinIR-M_x8.pth"
+hyperparams:
+  upscale: 8
+  img_size: 32
+  window_size: 8
+  img_range: 1.0
+  depths: [6, 6, 6, 6, 6, 6]
+  embed_dim: 180
+  num_heads: [6, 6, 6, 6, 6, 6]
+  mlp_ratio: 2
+  drop_path_rate: 0.1
+  norm_layer: torch.nn.LayerNorm
+  upsampler: "pixelshuffle"
+  resi_connection: "1conv"

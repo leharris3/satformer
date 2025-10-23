@@ -1,0 +1,33 @@
+global:
+  device: 0
+  mode: eval
+  formulation: p(y|y_sparse_benchmark)
+
+model:
+  name: nn_interpolation
+  pretrained: True
+  weights:
+  config:
+
+validation:
+  batch_size: 1
+  steps_per_epoch: 1000
+  loss: InpaintingL1
+
+# TODO: this does (almost) nothing
+dataset:
+  name: SapphireDataset
+  image_size: 224
+  crop_size: 128
+  num_workers: 0
+  masking_ratio: 1
+
+logging:
+  root: /playpen/mufan/levi/tianlong-chen-lab/material-super-resolution/__exps__/ablations/augmentations/_evals
+  exp_name: gpstruct-eval-50%-sparse
+  result_columns: ["step", "mae", "mse", "psnr", "ssim", "older", "celano_script_y", "celano_script_y_sparse"]
+  save_weights: true
+  save_only_best_weights: true
+  enable_tensorboard: false
+  log_figures: false
+  log_interval: 100
