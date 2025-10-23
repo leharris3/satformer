@@ -1,7 +1,9 @@
 import os
 import torch
 import h5py
+import xarray as xr
 
+from typing import List
 from glob import glob
 from tqdm import tqdm
 from pathlib import Path
@@ -9,13 +11,7 @@ from torch.utils.data import Dataset
 from concurrent.futures import ThreadPoolExecutor
 
 
-# challenge num.1 is to predict cummulative rainfall from satallite data
 WFC_ROOT_DIR = "/playpen-ssd/levi/w4c/w4c-25/weather4cast_data"
-
-# OPERA_TRAIN_DATA_PATH = "weather4cast_data/w4c25/*/OPERA/*.train.*.h5"
-# OPERA_VAL_DATA_PATH   = "weather4cast_data/w4c25/*/OPERA/*.val.*.h5"
-# HRIT_TRAIN_DATA_PATH  = "weather4cast_data/w4c25/*/HRIT/*.train.*.h5"
-# HRIT_VAL_DATA_PATH    = "weather4cast_data/w4c25/*/HRIT/*.val.*.h5"
 
 
 class Sat2RadDataset(Dataset):
@@ -90,41 +86,46 @@ class Sat2RadDataset(Dataset):
             opera_fps = opera_fps[:1]
             hrit_fps  = hrit_fps[:1]
         
-        # high-res radar rain-rates
-        # [B, 226, 226, 1, T]
-        self.opera_buffer = []
-
         # multiband satallite data
-        # [B, 1512, 1512, 11, T]
-        self.hrit_buffer = []
+        # [B, T1, 11, 252, 252]
+        self.hrit_buffer: List[xr.Dataset] = []
 
-        # safe HDF5 read
-        def _read_first_dataset(fp: str):
-            with h5py.File(fp, "r") as f:
-                keys = sorted(list(f.keys()))
-                if not keys:
-                    raise RuntimeError(f"No datasets in file: {fp}")
-                name = "data" if "data" in f else keys[0]
-                return f[name][:]
+        # high-res radar rain-rates
+        # [B, T2, 252, 252, 1]
+        self.opera_buffer: List[xr.Dataset] = []
 
-        # TODO: horribly slow...
-        with ThreadPoolExecutor() as ex:
+        for fp_hr, fp_op in tqdm(zip(hrit_fps, opera_fps), desc="Loading dataset...", total=len(hrit_fps)):
+            
+            ds = xr.open_dataset(fp_hr, phony_dims='sort')
+            self.hrit_buffer.append(ds)
 
-            # OPERA
-            for arr in tqdm(
-                ex.map(_read_first_dataset, opera_fps),
-                total=len(opera_fps),
-                desc="Loading OPERA data..."
-            ):
-                self.opera_buffer.append(torch.Tensor(arr))
+            ds = xr.open_dataset(fp_op, phony_dims='sort')
+            self.opera_buffer.append(ds)
 
-            # HRIT
-            for arr in tqdm(
-                ex.map(_read_first_dataset, hrit_fps),
-                total=len(hrit_fps),
-                desc="Loading HRIT data..."
-            ):
-                self.hrit_buffer.append(torch.Tensor(arr))
+        # # safe HDF5 read
+        # def _read_first_dataset(fp: str):
+        #     with h5py.File(fp, "r") as f:
+        #         name = list(f.keys())[0]
+        #         return f[name][:]
+
+        # # TODO: horribly slow...
+        # with ThreadPoolExecutor() as ex:
+
+        #     # OPERA
+        #     for arr in tqdm(
+        #         ex.map(_read_first_dataset, opera_fps),
+        #         total=len(opera_fps),
+        #         desc="Loading OPERA data..."
+        #     ):
+        #         self.opera_buffer.append(torch.Tensor(arr))
+
+        #     # HRIT
+        #     for arr in tqdm(
+        #         ex.map(_read_first_dataset, hrit_fps),
+        #         total=len(hrit_fps),
+        #         desc="Loading HRIT data..."
+        #     ):
+        #         self.hrit_buffer.append(torch.Tensor(arr))
 
         breakpoint()
 
@@ -145,7 +146,7 @@ class Sat2RadDataset(Dataset):
         # output (y)
         # OPERA average, hourly cummulative precipitation for 4H; 32x32 pixels
         # - (B, H, W, C, T) -> (B, 32, 32, 1, 16); layer_last
-        # - regression target: (layer_last).mean() * 4
+        # - regression target: (layer_last).mean() * 4; note: we do NOT average across batch dimension
 
         return {}
 
