@@ -1,0 +1,53 @@
+{
+  "global": {
+    "num_epochs": 1,
+    "device": 0
+  },
+  "model": {
+    "target": "src.model.toy.ToyCummulativePrecipitationModel",
+    "kwargs": {}
+  },
+  "optimizer": {
+    "target": "src.model.toy.ToyCummulativePrecipitationModel",
+    "kwargs": {
+      "lr": null
+    }
+  },
+  "dataset": {
+    "train": {
+      "target": "src.dataloader.challenge_one_dataloader.Sat2RadDataset",
+      "kwargs": {}
+    },
+    "val": {
+      "target": "src.dataloader.challenge_one_dataloader.Sat2RadDataset",
+      "kwargs": {}
+    }
+  },
+  "dataloader": {
+    "train": {
+      "kwargs": {}
+    },
+    "val": {
+      "kwargs": {}
+    }
+  },
+  "loss": {
+    "train": {
+      "target": "src.util.loss.MSE",
+      "kwargs": {}
+    },
+    "val": {
+      "target": "src.util.loss.MSE",
+      "kwargs": {}
+    }
+  },
+  "logging": {
+    "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
+    "exp_name": "toy",
+    "log_interval": 100,
+    "wandb": {
+      "log": true,
+      "api_key": "3d8c09b359c1abc995fd03c27398c41afce857c1"
+    }
+  }
+}

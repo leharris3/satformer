@@ -136,8 +136,6 @@ class Sat2RadDataset(Dataset):
         # clip @0; it can't rain a negative amount; large negative values in our datasets
         y = y.clip(0)
 
-        breakpoint()
-
         # input (X)
         # 1H HRIT satallite context (can be larger); centered about corresponding area of precipitation
         # - (B, H, W, C, T) -> (B, (32 // 6) + (32 // 6) + 1, 11, 4) -> (B, 6+, 6+, 11, 4)
@@ -147,7 +145,10 @@ class Sat2RadDataset(Dataset):
         # - (B, H, W, C, T) -> (B, 32, 32, 1, 16); layer_last
         # - regression target: (layer_last).mean() * 4; note: we do NOT average across batch dimension
 
-        return {}
+        return {
+            "X": X,
+            "y": y,
+        }
 
 
 class ChallengeOneTestSet(Dataset):
@@ -165,3 +166,4 @@ if __name__ == "__main__":
 
     ds   = Sat2RadDataset(split="val", toy_dataset=False)
     item = ds.__getitem__(0)
+    breakpoint()
