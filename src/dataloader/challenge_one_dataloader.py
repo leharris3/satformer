@@ -1,6 +1,8 @@
 import os
 import torch
 import h5py
+import random
+import numpy as np
 import xarray as xr
 
 from typing import List
@@ -102,33 +104,6 @@ class Sat2RadDataset(Dataset):
             ds = xr.open_dataset(fp_op, phony_dims='sort')
             self.opera_buffer.append(ds)
 
-        # # safe HDF5 read
-        # def _read_first_dataset(fp: str):
-        #     with h5py.File(fp, "r") as f:
-        #         name = list(f.keys())[0]
-        #         return f[name][:]
-
-        # # TODO: horribly slow...
-        # with ThreadPoolExecutor() as ex:
-
-        #     # OPERA
-        #     for arr in tqdm(
-        #         ex.map(_read_first_dataset, opera_fps),
-        #         total=len(opera_fps),
-        #         desc="Loading OPERA data..."
-        #     ):
-        #         self.opera_buffer.append(torch.Tensor(arr))
-
-        #     # HRIT
-        #     for arr in tqdm(
-        #         ex.map(_read_first_dataset, hrit_fps),
-        #         total=len(hrit_fps),
-        #         desc="Loading HRIT data..."
-        #     ):
-        #         self.hrit_buffer.append(torch.Tensor(arr))
-
-        breakpoint()
-
     def __len__(self) -> int: 
         return self.steps_per_epoch
 
@@ -136,8 +111,32 @@ class Sat2RadDataset(Dataset):
 
         # TODO:
         # 1. sampling proceedure
-            # pick a random OPERA patch that's not too close to a boarder
-            # pick the corresponding
+        # - pick a random OPERA patch that's not too close to a boarder
+        # - pick the corresponding
+
+        # choose rand idx in [0, ..., # datasets)
+        rand_idx = random.randint(0, len(self.hrit_buffer) - 1)
+
+        # [T1, 11, 252, 252]
+        hrit_ds  = self.hrit_buffer[rand_idx]['REFL-BT']
+        
+        # [T2, 1, 252, 252]; T2<=T1 typically
+        opera_ds = self.opera_buffer[rand_idx]['rates.crop']
+
+        T       = min(hrit_ds.shape[0], opera_ds.shape[0])
+        start_T = random.randint(0, T-20)
+
+        # input: 1H satellite data
+        X = hrit_ds[start_T:start_T+4, ...].to_numpy()
+        X = torch.Tensor(X)
+
+        # label: 4H proceeding rainfall
+        y = opera_ds[start_T+4:start_T+20].to_numpy()
+        y = torch.Tensor(y)
+        # clip @0; it can't rain a negative amount; large negative values in our datasets
+        y = y.clip(0)
+
+        breakpoint()
 
         # input (X)
         # 1H HRIT satallite context (can be larger); centered about corresponding area of precipitation
@@ -163,4 +162,6 @@ class ChallengeOneTestSet(Dataset):
     
 
 if __name__ == "__main__":
-    ds = Sat2RadDataset(toy_dataset=False)
+
+    ds   = Sat2RadDataset(split="val", toy_dataset=False)
+    item = ds.__getitem__(0)
