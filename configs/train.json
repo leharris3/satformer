@@ -54,7 +54,7 @@
     "exp_name": "toy",
     "log_interval": 100,
     "wandb": {
-      "log": false,
+      "log": true,
       "api_key": "3d8c09b359c1abc995fd03c27398c41afce857c1"
     }
   }

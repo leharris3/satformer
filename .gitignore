@@ -1,5 +1,7 @@
 __exps__
 __sparse-cafm
+
 weather4cast_data
+-wandb
 
 **.log
