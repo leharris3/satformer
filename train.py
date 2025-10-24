@@ -67,14 +67,12 @@ def train(
     config: dict,
     **kwargs
 ) -> None:
-    
-    breakpoint()
 
     logger = setup_logger(config)
 
-    if config["wandb"]["log"] == True:
+    if config['logging']["wandb"]["log"] == True:
 
-        wandb.login(config["wandb"]["api_key"])
+        wandb.login(key=config['logging']["wandb"]["api_key"])
         wandb.init(
             entity="team-levi",
             project="w4c-challenge",
@@ -82,16 +80,16 @@ def train(
             name=config['logging']['exp_name'],
         )
 
-    model:nn.Module  = create_module(config['model']['target'],            config['model']['kwargs'])
-    train_dataset    = create_module(config['dataset']['train']['target'], config['dataset']['train']['kwargs'])
-    val_dataset      = create_module(config['dataset']['val']['target']  , config['dataset']['val']['kwargs'])
+    model:nn.Module  = create_module(config['model']['target'],            **config['model']['kwargs'])
+    train_dataset    = create_module(config['dataset']['train']['target'], **config['dataset']['train']['kwargs'])
+    val_dataset      = create_module(config['dataset']['val']['target']  , **config['dataset']['val']['kwargs'])
     
-    train_dataloader = create_dataloader(train_dataset, config['dataloader']['train']['kwargs'])
-    val_dataloader   = create_dataloader(val_dataset  , config['dataloader']['val']['kwargs'])
+    train_dataloader = create_dataloader(train_dataset, **config['dataloader']['train']['kwargs'])
+    val_dataloader   = create_dataloader(val_dataset  , **config['dataloader']['val']['kwargs'])
 
     # define loss function and optimizer
-    train_loss: torch.nn.Module = create_module(config['loss']['train']['target'], config['loss']['train']['kwargs'])
-    val_loss  : torch.nn.Module = create_module(config['loss']['val']['target'],   config['loss']['val']['kwargs'])
+    train_loss: torch.nn.Module = create_module(config['loss']['train']['target'], **config['loss']['train']['kwargs'])
+    val_loss  : torch.nn.Module = create_module(config['loss']['val']['target'],   **config['loss']['val']['kwargs'])
 
     # use to save model checkpoints
     best_val_loss = float("inf")
@@ -101,10 +99,10 @@ def train(
     module_path, class_name = config['optimizer']['target'].rsplit('.', 1)
     module                  = importlib.import_module(module_path)
     _class                  = getattr(module, class_name)
-    optimizer:nn.Module     = _class(model.parameters(), config["optimizer"]["kwargs"])
+    optimizer:nn.Module     = _class(model.parameters(), **config["optimizer"]["kwargs"])
 
     model.cuda(device)
-    model.float()
+    # model.float()
 
     # ---------- training loop ----------
     for epoch in range(num_epochs):
@@ -114,18 +112,21 @@ def train(
         for step, batch in enumerate(
             tqdm(train_dataloader, desc=f"Training: Epoch {epoch+1}/{num_epochs}")
         ):
+
+            X:torch.Tensor = batch["X"].cuda()
+            y:torch.Tensor = batch["y"].cuda()
+
+            # zero gradients
+            optimizer.zero_grad()
+
+            # predict
+            y_hat = model(X)
+
+            loss = train_loss(y_hat, y)
             
-            # ... load X, y
-
-            # # zero gradients
-            # optimizer.zero_grad()
-
-            # loss = train_loss(x, y)
-            
-            # # backprop and step
-
-            # loss.backward()
-            # optimizer.step()
+            # backprop and step
+            loss.backward()
+            optimizer.step()
 
             # logger.log(
             #     **{
@@ -222,8 +223,8 @@ if __name__ == "__main__":
         default="",
     )
 
-    args   = parser.parse_args()
-    config = json.load(args.config_fp)
-
-    # TODO: what is the difference between passing in args and **args?
-    train(config, args)
+    args:argparse.Namespace   = parser.parse_args()
+    with open(args.config_fp, 'r') as f:
+        config = json.load(f)
+    
+    train(config, **dict(args._get_kwargs()))

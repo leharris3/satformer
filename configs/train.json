@@ -8,9 +8,9 @@
     "kwargs": {}
   },
   "optimizer": {
-    "target": "src.model.toy.ToyCummulativePrecipitationModel",
+    "target": "torch.optim.Adam",
     "kwargs": {
-      "lr": null
+      "lr": 1e-5
     }
   },
   "dataset": {
@@ -25,10 +25,18 @@
   },
   "dataloader": {
     "train": {
-      "kwargs": {}
+      "kwargs": {
+        "batch_size": 1,
+        "shuffle": false,
+        "num_workers": 1
+      }
     },
     "val": {
-      "kwargs": {}
+      "kwargs": {
+        "batch_size": 1,
+        "shuffle": false,
+        "num_workers": 1
+      }
     }
   },
   "loss": {
@@ -46,7 +54,7 @@
     "exp_name": "toy",
     "log_interval": 100,
     "wandb": {
-      "log": true,
+      "log": false,
       "api_key": "3d8c09b359c1abc995fd03c27398c41afce857c1"
     }
   }

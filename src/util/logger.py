@@ -94,10 +94,10 @@ class ExperimentLogger:
     def _setup_exp_dir(self) -> None:
 
         # get date and time as a string
-        date_time_str = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        subdir_name = date_time_str + "_" + self.exp_name
-        exp_out_dir = os.path.join(self.root, subdir_name)
-        self.exp_dir = exp_out_dir
+        date_time_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        subdir_name   = date_time_str + "_" + self.exp_name
+        exp_out_dir   = os.path.join(self.root, subdir_name)
+        self.exp_dir  = exp_out_dir
 
         # make new subdir if needed
         os.makedirs(exp_out_dir, exist_ok=True)

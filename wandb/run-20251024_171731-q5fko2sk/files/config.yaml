@@ -1,0 +1,120 @@
+_wandb:
+    value:
+        cli_version: 0.22.2
+        e:
+            7mf7rfedmsqf2udzz5ildupapavkvpxa:
+                args:
+                    - --config
+                    - configs/train.json
+                codePath: train.py
+                codePathLocal: train.py
+                cpu_count: 64
+                cpu_count_logical: 128
+                cudaVersion: "12.5"
+                disk:
+                    /:
+                        total: "105495744512"
+                        used: "51248820224"
+                email: levlevi@email.unc.edu
+                executable: /home/levlevi/miniconda3/envs/wfc/bin/python
+                git:
+                    commit: 60cd132075ebab44cea77fb5e50449c0b23b784f
+                    remote: git@github.com:leharris3/w4c-25.git
+                gpu: NVIDIA RTX A6000
+                gpu_count: 8
+                gpu_nvidia:
+                    - architecture: Ampere
+                      cudaCores: 10752
+                      memoryTotal: "51527024640"
+                      name: NVIDIA RTX A6000
+                      uuid: GPU-a57f3328-5955-fae1-5b28-f7670edb98e6
+                    - architecture: Ampere
+                      cudaCores: 10752
+                      memoryTotal: "51527024640"
+                      name: NVIDIA RTX A6000
+                      uuid: GPU-ccf78f35-2c7f-558a-d2e6-ccb6a631660f
+                    - architecture: Ampere
+                      cudaCores: 10752
+                      memoryTotal: "51527024640"
+                      name: NVIDIA RTX A6000
+                      uuid: GPU-48189d77-bcc3-1150-f5de-1dcaca79d988
+                    - architecture: Ampere
+                      cudaCores: 10752
+                      memoryTotal: "51527024640"
+                      name: NVIDIA RTX A6000
+                      uuid: GPU-c2e5f9f0-2336-05e0-bf7d-53a12695ee8a
+                    - architecture: Ampere
+                      cudaCores: 10752
+                      memoryTotal: "51527024640"
+                      name: NVIDIA RTX A6000
+                      uuid: GPU-207bf876-af42-8679-9ea9-aac5c2113fba
+                    - architecture: Ampere
+                      cudaCores: 10752
+                      memoryTotal: "51527024640"
+                      name: NVIDIA RTX A6000
+                      uuid: GPU-d9c7bcc7-d406-ea60-4032-9b94de664204
+                    - architecture: Ampere
+                      cudaCores: 10752
+                      memoryTotal: "51527024640"
+                      name: NVIDIA RTX A6000
+                      uuid: GPU-f5e59a43-1025-1cdb-063e-e5e047858a7a
+                    - architecture: Ampere
+                      cudaCores: 10752
+                      memoryTotal: "51527024640"
+                      name: NVIDIA RTX A6000
+                      uuid: GPU-dea0871d-dfba-c71a-7a75-e26209b5918f
+                host: beowulf.cs.unc.edu
+                memory:
+                    total: "540852654080"
+                os: Linux-5.15.0-157-generic-x86_64-with-glibc2.35
+                program: /playpen-ssd/levi/w4c/w4c-25/train.py
+                python: CPython 3.14.0
+                root: /playpen-ssd/levi/w4c/w4c-25
+                startedAt: "2025-10-24T21:17:31.776671Z"
+                writerId: 7mf7rfedmsqf2udzz5ildupapavkvpxa
+        m: []
+        python_version: 3.14.0
+        t:
+            "1":
+                - 1
+            "2":
+                - 1
+            "3":
+                - 13
+                - 16
+            "4": 3.14.0
+            "5": 0.22.2
+            "12": 0.22.2
+            "13": linux-x86_64
+dataset:
+    value:
+        train:
+            target: src.dataloader.challenge_one_dataloader.Sat2RadDataset
+        val:
+            target: src.dataloader.challenge_one_dataloader.Sat2RadDataset
+global:
+    value:
+        device: 0
+        num_epochs: 1
+logging:
+    value:
+        exp_name: toy
+        log_interval: 100
+        root: /playpen-ssd/levi/w4c/w4c-25/__exps__
+        wandb:
+            api_key: 3d8c09b359c1abc995fd03c27398c41afce857c1
+            log: true
+loss:
+    value:
+        train:
+            target: src.util.loss.MSE
+        val:
+            target: src.util.loss.MSE
+model:
+    value:
+        target: src.model.toy.ToyCummulativePrecipitationModel
+optimizer:
+    value:
+        kwargs:
+            lr: null
+        target: src.model.toy.ToyCummulativePrecipitationModel
