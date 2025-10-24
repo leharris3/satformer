@@ -8,14 +8,16 @@ class ToyCummulativePrecipitationModel(nn.Module):
         super().__init__(*args, **kwargs)
 
         # [4, 11, 252, 252] -> [16, 1, 252, 252]
-        self.c1 = nn.Conv1d(11, 1, 1)
+        self.c1 = nn.Conv3d(44, 16, 1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
 
-        # # [4, 11, 252, 252] -> [4, 1, 252, 252]
-        # x = self.c1(x)
+        B, T, C, H, W = x.shape
 
-        # # [4, 1, 252, 252] -> [16, 1, 252, 252]
-        # x = self.c2(x)
+        # [4, 11, 252, 252] -> [44, 1, 252, 252]
+        x = x.reshape(B, T * C, 1, H, W)
+        
+        # [44, 1, 252, 252] -> [16, 1, 252, 252]
+        x = self.c1(x)
 
-        return torch.rand(1, 16, 1, 252, 252).cuda()
+        return x

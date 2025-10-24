@@ -137,15 +137,15 @@ def train(
             #         "val_loss": None,
             #     }
             # )
-            # wandb.log(
-            #     {
-            #         "epoch": epoch,
-            #         "train_l1_loss": loss.item(),
-            #         "train_psnr": psnr,
-            #         "train_ssim": ssim,
-            #         "train_RMSE_surface_roughness_l1": rmse_sr_loss,
-            #     }
-            # )
+
+            if config['logging']["wandb"]["log"] == True:
+                
+                wandb.log(
+                    {
+                        "epoch": epoch,
+                        "train_loss": loss.item(),
+                    }
+                )
 
             # # log figures every 100 steps
             # if step % 100 != 0:
@@ -153,8 +153,6 @@ def train(
 
             # ... figure logging logic
             # wandb.log({"Train Qualitative Results": wandb.Image(fig)})
-
-            pass
 
         # validation
         model.eval()
@@ -167,11 +165,16 @@ def train(
                 tqdm(val_dataloader, desc=f"Validation: Epoch {epoch+1}/{num_epochs}")
             ):
 
-                # NOTE: manually specifing X vs y
-                # # ... load X, y
-                
-                # ... loss
-                # loss = val_loss(X_hat, X)
+                X:torch.Tensor = batch["X"].cuda()
+                y:torch.Tensor = batch["y"].cuda()
+
+                # zero gradients
+                optimizer.zero_grad()
+
+                # predict
+                y_hat = model(X)
+
+                loss = val_loss(y_hat, y)
 
                 # logger.log(
                 #     **{
@@ -182,15 +185,14 @@ def train(
                 #         "val_loss": loss.item(),
                 #     }
                 # )
-                # wandb.log(
-                #     {
-                #         "epoch": epoch,
-                #         "val_l1_loss": loss.item(),
-                #         "val_psnr": psnr,
-                #         "val_ssim": ssim,
-                #         "val_RMSE_surface_roughness_l1": rmse_sr_loss,
-                #     }
-                # )
+                
+                if config['logging']["wandb"]["log"] == True:
+                    wandb.log(
+                        {
+                            "epoch": epoch,
+                            "val_loss": loss.item(),
+                        }
+                    )
 
                 # # log figures every 100 steps
                 # if i % 100 != 0:
@@ -201,8 +203,6 @@ def train(
 
                 # # ++
                 # num_val_steps += 1
-
-                pass
 
             # optional: log best/recent model weights
             avg_val_loss = val_running_loss / num_val_steps
