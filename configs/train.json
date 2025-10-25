@@ -1,6 +1,6 @@
 {
   "global": {
-    "num_epochs": 1,
+    "num_epochs": 100,
     "device": 0
   },
   "model": {

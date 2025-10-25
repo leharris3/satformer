@@ -104,6 +104,8 @@ class Sat2RadDataset(Dataset):
             ds = xr.open_dataset(fp_op, phony_dims='sort')
             self.opera_buffer.append(ds)
 
+        # TODO: quickly calculate rough std normal statistics for X and y sets
+
     def __len__(self) -> int: 
         return self.steps_per_epoch
 
@@ -133,8 +135,11 @@ class Sat2RadDataset(Dataset):
         # label: 4H proceeding rainfall
         y = opera_ds[start_T+4:start_T+20].to_numpy()
         y = torch.Tensor(y)
+
         # clip @0; it can't rain a negative amount; large negative values in our datasets
         y = y.clip(0)
+
+        breakpoint()
 
         # input (X)
         # 1H HRIT satallite context (can be larger); centered about corresponding area of precipitation
