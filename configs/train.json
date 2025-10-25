@@ -1,6 +1,6 @@
 {
   "global": {
-    "num_epochs": 100,
+    "num_epochs": 1,
     "device": 0
   },
   "model": {
@@ -28,14 +28,14 @@
       "kwargs": {
         "batch_size": 1,
         "shuffle": false,
-        "num_workers": 1
+        "num_workers": 0
       }
     },
     "val": {
       "kwargs": {
         "batch_size": 1,
         "shuffle": false,
-        "num_workers": 1
+        "num_workers": 0
       }
     }
   },
@@ -55,7 +55,8 @@
     "log_interval": 100,
     "wandb": {
       "log": true,
-      "api_key": "3d8c09b359c1abc995fd03c27398c41afce857c1"
+      "api_key": "3d8c09b359c1abc995fd03c27398c41afce857c1",
+      "save_figure_step": 100
     }
   }
 }

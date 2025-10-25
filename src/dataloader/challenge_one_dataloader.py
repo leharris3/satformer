@@ -139,8 +139,6 @@ class Sat2RadDataset(Dataset):
         # clip @0; it can't rain a negative amount; large negative values in our datasets
         y = y.clip(0)
 
-        breakpoint()
-
         # input (X)
         # 1H HRIT satallite context (can be larger); centered about corresponding area of precipitation
         # - (B, H, W, C, T) -> (B, (32 // 6) + (32 // 6) + 1, 11, 4) -> (B, 6+, 6+, 11, 4)

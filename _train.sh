@@ -7,7 +7,7 @@ EXP_NAME=initial_test
 CONFIG_FP="configs/train.json"
 
 python train.py \
-    --config $CONFIG_FP > "$LOGS_DIR/_$EXP_NAME.out" 2>&1 &
+    --config $CONFIG_FP # > "$LOGS_DIR/_$EXP_NAME.out" 2>&1 &
 
 # ---------------------------------------
-exit
+# exit

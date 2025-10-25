@@ -17,6 +17,7 @@ from typing import List, Optional
 from torch.utils.data import DataLoader
 
 from src.util.logger import ExperimentLogger
+from src.util.plot.opera import plot_opera_16hr
 
 warnings.simplefilter("always")
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -147,12 +148,11 @@ def train(
                     }
                 )
 
-            # # log figures every 100 steps
-            # if step % 100 != 0:
-            #     continue
-
-            # ... figure logging logic
-            # wandb.log({"Train Qualitative Results": wandb.Image(fig)})
+                save_fig_step = float(config['logging']['wandb']['save_figure_step'])
+                if step % save_fig_step == 0:
+                    opera_input_fig = plot_opera_16hr(y)
+                    # ... figure logging logic
+                    wandb.log({"(y) OPERA": wandb.Image(opera_input_fig)})
 
         # validation
         model.eval()
