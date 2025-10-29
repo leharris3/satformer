@@ -13,7 +13,7 @@ import torch.nn as nn
 
 from tqdm import tqdm
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Any
 from torch.utils.data import DataLoader
 
 from src.util.logger import ExperimentLogger
@@ -23,11 +23,15 @@ warnings.simplefilter("always")
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 
-def create_module(target: str, **kwargs):
+def create_module(target: str, **kwargs) -> Any:
     """
     Args
     ---
     :target: module path to class (e.g., `src.model.toy.ToyCummulativePrecipitationModel`)
+    
+    Return
+    ---
+    :Any:
     """
 
     module_path, class_name = target.rsplit('.', 1)
@@ -117,13 +121,31 @@ def train(
             X:torch.Tensor = batch["X"].cuda()
             y:torch.Tensor = batch["y"].cuda()
 
+            # [B, T=4, C=11, H, W] ->
+            # [B, C=11, H, W]
+            X = X.mean(dim=1)
+
+            # [B, T=16, C=1, H, W] ->
+            # [B, T=16, H, W]      ->
+            # [B, H, W]            ->
+            # [B, 1]
+            y_regression_target = (y.squeeze(2).mean(dim=1) * 4).mean(dim=(1, 2)).unsqueeze(1)
+
             # zero gradients
             optimizer.zero_grad()
 
             # predict
-            y_hat = model(X)
+            # [B, C=1, H, W]
+            y_hat:torch.Tensor      = model(X)
 
-            loss = train_loss(y_hat, y)
+            # HACK
+            y_hat_regression_pred = y_hat.squeeze(1).mean(dim=(1, 2)).unsqueeze(1)
+
+            # loss = train_loss(y_hat, y)
+
+            # MSE regression loss
+            loss = train_loss(y_hat_regression_pred, y_regression_target)
+            breakpoint()
             
             # backprop and step
             loss.backward()
@@ -150,8 +172,9 @@ def train(
 
                 save_fig_step = float(config['logging']['wandb']['save_figure_step'])
                 if step % save_fig_step == 0:
+                    # log a 16-image mosaic
+                    # TODO: one day... add support for flexible callbacks
                     opera_input_fig = plot_opera_16hr(y)
-                    # ... figure logging logic
                     wandb.log({"(y) OPERA": wandb.Image(opera_input_fig)})
 
         # validation
@@ -168,13 +191,29 @@ def train(
                 X:torch.Tensor = batch["X"].cuda()
                 y:torch.Tensor = batch["y"].cuda()
 
+                # [B, T=4, C=11, H, W] ->
+                # [B, C=11, H, W]
+                X = X.mean(dim=1)
+
+                # [B, T=16, C=1, H, W] ->
+                # [B, T=16, H, W]      ->
+                # [B, H, W]            ->
+                # [B, 1]
+                y_regression_target = (y.squeeze(2).mean(dim=1) * 4).mean(dim=(1, 2)).unsqueeze(1)
+
                 # zero gradients
                 optimizer.zero_grad()
 
                 # predict
                 y_hat = model(X)
 
-                loss = val_loss(y_hat, y)
+                # HACK
+                y_hat_regression_pred = y_hat.squeeze(1).mean(dim=(1, 2)).unsqueeze(1)
+
+                # loss = val_loss(y_hat, y)
+
+                # MSE regression loss
+                loss = val_loss(y_hat_regression_pred, y_regression_target)
 
                 # logger.log(
                 #     **{
@@ -187,6 +226,8 @@ def train(
                 # )
                 
                 if config['logging']["wandb"]["log"] == True:
+                    
+                    # log some data every step
                     wandb.log(
                         {
                             "epoch": epoch,
@@ -194,12 +235,12 @@ def train(
                         }
                     )
 
-                # # log figures every 100 steps
-                # if i % 100 != 0:
-                #     continue
-
-                # ... figure logging logic
-                # wandb.log({"Val Qualitative Results": wandb.Image(fig)})
+                    save_fig_step = float(config['logging']['wandb']['save_figure_step'])
+                    if step % save_fig_step == 0:
+                        # log a 16-image mosaic
+                        # TODO: one day... add support for flexible callbacks
+                        opera_input_fig = plot_opera_16hr(y)
+                        wandb.log({"(y) OPERA": wandb.Image(opera_input_fig)})
 
                 # # ++
                 # num_val_steps += 1

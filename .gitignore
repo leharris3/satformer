@@ -1,6 +1,8 @@
-__exps__
 __sparse-cafm
 __ccrfcd-gauge-grids
+__SmaAt-UNet
+
+__exps__
 
 weather4cast_data
 wandb

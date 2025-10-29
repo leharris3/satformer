@@ -1,11 +1,11 @@
 {
   "global": {
-    "num_epochs": 1,
+    "num_epochs": 100,
     "device": 0
   },
   "model": {
-    "target": "src.model.toy.ToyCummulativePrecipitationModel",
-    "kwargs": {}
+    "target": "src.model.smaat.SmaAt_UNet.SmaAt_UNet",
+    "kwargs": {"n_channels": 11, "n_classes": 1}
   },
   "optimizer": {
     "target": "torch.optim.Adam",
