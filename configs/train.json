@@ -1,6 +1,6 @@
 {
   "global": {
-    "num_epochs": 100,
+    "num_epochs": 200,
     "device": 0
   },
   "model": {
@@ -10,7 +10,7 @@
   "optimizer": {
     "target": "torch.optim.Adam",
     "kwargs": {
-      "lr": 1e-5
+      "lr": 1e-10
     }
   },
   "dataset": {
@@ -41,17 +41,17 @@
   },
   "loss": {
     "train": {
-      "target": "src.util.loss.MSE",
+      "target": "src.util.loss.L1",
       "kwargs": {}
     },
     "val": {
-      "target": "src.util.loss.MSE",
+      "target": "src.util.loss.L1",
       "kwargs": {}
     }
   },
   "logging": {
     "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
-    "exp_name": "toy",
+    "exp_name": "norm inputs",
     "log_interval": 100,
     "wandb": {
       "log": true,

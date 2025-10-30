@@ -11,9 +11,15 @@ from tqdm import tqdm
 from pathlib import Path
 from torch.utils.data import Dataset
 from concurrent.futures import ThreadPoolExecutor
+from src.util.scale import scale_zero_to_one
 
 
 WFC_ROOT_DIR = "/playpen-ssd/levi/w4c/w4c-25/weather4cast_data"
+
+# HACK: hard code normalization stats from training set
+X_MAX     = 336.2159
+Y_MAX     = 603.4000
+Y_REG_MAX = 536120.9375
 
 
 class Sat2RadDataset(Dataset):
@@ -22,7 +28,10 @@ class Sat2RadDataset(Dataset):
             self, 
             split="train",
             steps_per_epoch:int=100,
-            toy_dataset=False
+            toy_dataset=False,
+            X_max=X_MAX,
+            y_max=Y_MAX,
+            y_reg_max=Y_REG_MAX,
         ):
 
         super().__init__()
@@ -105,16 +114,16 @@ class Sat2RadDataset(Dataset):
             self.opera_buffer.append(ds)
 
         # TODO: quickly calculate rough std normal statistics for X and y sets
+        self.X_max = X_max
+        self.y_max = y_max
+        self.y_reg_max = y_reg_max
 
     def __len__(self) -> int: 
         return self.steps_per_epoch
 
     def __getitem__(self, index: int) -> dict:
-
-        # TODO:
-        # 1. sampling proceedure
-        # - pick a random OPERA patch that's not too close to a boarder
-        # - pick the corresponding
+        
+        # TODO: randomly crop a H=32, W=32 slice from X, y
 
         # choose rand idx in [0, ..., # datasets)
         rand_idx = random.randint(0, len(self.hrit_buffer) - 1)
@@ -131,13 +140,34 @@ class Sat2RadDataset(Dataset):
         # input: 1H satellite data
         X = hrit_ds[start_T:start_T+4, ...].to_numpy()
         X = torch.Tensor(X)
+        
+        # HACK: [T=4, C=11, H, W] -> [C=11, H, W]
+        X = X.mean(dim=0)
 
         # label: 4H proceeding rainfall
+        # [T=16, C=1, H=252, W=252]
         y = opera_ds[start_T+4:start_T+20].to_numpy()
         y = torch.Tensor(y)
 
-        # clip @0; it can't rain a negative amount; large negative values in our datasets
+        # NOTE: clip @0; it can't rain a negative amount; large negative values in our datasets
         y = y.clip(0)
+
+        # wfc challenge #1 target
+        # - average hourly cummulative rainfall
+        # - individual feature maps (H, W) are 15 minute accumulated rainfall
+        # - we derive regression targets: 
+        # ---- hourly rainfall    : H = (maps) * 4
+        # ---- avg hourly rainfall: H/16
+        
+        # [T, C=1, H, W] -> [T, H, W]
+        y_reg = y.squeeze(1)
+        y_reg = y_reg.sum(dim=(1, 2)) # [T]; cummulative 15M rainfall
+        y_reg = y_reg * 4             # [T]; cummulative 1H rainfall
+        y_reg = y_reg.mean()          # [T]; average cummulative 1H rainfall
+
+        X_norm     = scale_zero_to_one(X,     dataset_min=0, dataset_max=self.X_max)
+        y_norm     = scale_zero_to_one(y,     dataset_min=0, dataset_max=self.y_max)
+        y_reg_norm = scale_zero_to_one(y_reg, dataset_min=0, dataset_max=self.y_reg_max)
 
         # input (X)
         # 1H HRIT satallite context (can be larger); centered about corresponding area of precipitation
@@ -149,8 +179,12 @@ class Sat2RadDataset(Dataset):
         # - regression target: (layer_last).mean() * 4; note: we do NOT average across batch dimension
 
         return {
-            "X": X,
-            "y": y,
+            "X"     : X,
+            "y"     : y,
+            "y_reg" : y_reg,
+            "X_norm": X_norm,
+            "y_norm": y_norm,
+            "y_reg_norm": y_reg_norm
         }
 
 

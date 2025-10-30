@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader
 
 from src.util.logger import ExperimentLogger
 from src.util.plot.opera import plot_opera_16hr
+from src.util.scale import scale_zero_to_one
 
 warnings.simplefilter("always")
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -118,34 +119,17 @@ def train(
             tqdm(train_dataloader, desc=f"Training: Epoch {epoch+1}/{num_epochs}")
         ):
 
-            X:torch.Tensor = batch["X"].cuda()
-            y:torch.Tensor = batch["y"].cuda()
-
-            # [B, T=4, C=11, H, W] ->
-            # [B, C=11, H, W]
-            X = X.mean(dim=1)
-
-            # [B, T=16, C=1, H, W] ->
-            # [B, T=16, H, W]      ->
-            # [B, H, W]            ->
-            # [B, 1]
-            y_regression_target = (y.squeeze(2).mean(dim=1) * 4).mean(dim=(1, 2)).unsqueeze(1)
+            X:torch.Tensor = batch["X_norm"].cuda()
+            y:torch.Tensor = batch["y_reg_norm"].cuda()
 
             # zero gradients
             optimizer.zero_grad()
 
-            # predict
-            # [B, C=1, H, W]
-            y_hat:torch.Tensor      = model(X)
+            # forward; [B, C=1, H, W]
+            y_hat:torch.Tensor = model(X)
 
-            # HACK
-            y_hat_regression_pred = y_hat.squeeze(1).mean(dim=(1, 2)).unsqueeze(1)
-
-            # loss = train_loss(y_hat, y)
-
-            # MSE regression loss
-            loss = train_loss(y_hat_regression_pred, y_regression_target)
-            breakpoint()
+            print(y.shape, y_hat.shape)
+            loss = train_loss(y_hat, y)
             
             # backprop and step
             loss.backward()
@@ -174,7 +158,8 @@ def train(
                 if step % save_fig_step == 0:
                     # log a 16-image mosaic
                     # TODO: one day... add support for flexible callbacks
-                    opera_input_fig = plot_opera_16hr(y)
+                    y_og = batch["y"]
+                    opera_input_fig = plot_opera_16hr(y_og)
                     wandb.log({"(y) OPERA": wandb.Image(opera_input_fig)})
 
         # validation
@@ -188,32 +173,13 @@ def train(
                 tqdm(val_dataloader, desc=f"Validation: Epoch {epoch+1}/{num_epochs}")
             ):
 
-                X:torch.Tensor = batch["X"].cuda()
-                y:torch.Tensor = batch["y"].cuda()
-
-                # [B, T=4, C=11, H, W] ->
-                # [B, C=11, H, W]
-                X = X.mean(dim=1)
-
-                # [B, T=16, C=1, H, W] ->
-                # [B, T=16, H, W]      ->
-                # [B, H, W]            ->
-                # [B, 1]
-                y_regression_target = (y.squeeze(2).mean(dim=1) * 4).mean(dim=(1, 2)).unsqueeze(1)
-
-                # zero gradients
-                optimizer.zero_grad()
+                X:torch.Tensor = batch["X_norm"].cuda()
+                y:torch.Tensor = batch["y_reg_norm"].cuda()
 
                 # predict
+                # - underflowing?
                 y_hat = model(X)
-
-                # HACK
-                y_hat_regression_pred = y_hat.squeeze(1).mean(dim=(1, 2)).unsqueeze(1)
-
-                # loss = val_loss(y_hat, y)
-
-                # MSE regression loss
-                loss = val_loss(y_hat_regression_pred, y_regression_target)
+                loss  = val_loss(y_hat, y)
 
                 # logger.log(
                 #     **{
@@ -238,8 +204,8 @@ def train(
                     save_fig_step = float(config['logging']['wandb']['save_figure_step'])
                     if step % save_fig_step == 0:
                         # log a 16-image mosaic
-                        # TODO: one day... add support for flexible callbacks
-                        opera_input_fig = plot_opera_16hr(y)
+                        y_og = batch["y"]
+                        opera_input_fig = plot_opera_16hr(y_og)
                         wandb.log({"(y) OPERA": wandb.Image(opera_input_fig)})
 
                 # # ++
