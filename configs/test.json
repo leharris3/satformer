@@ -7,31 +7,14 @@
     "target": "src.model.smaat.SmaAt_UNet.SmaAt_UNet",
     "kwargs": {"n_channels": 11, "n_classes": 1}
   },
-  "optimizer": {
-    "target": "torch.optim.Adam",
-    "kwargs": {
-      "lr": 1e-10
-    }
-  },
   "dataset": {
-    "train": {
+    "test": {
       "target": "src.dataloader.challenge_one_dataloader.Sat2RadDataset",
-      "kwargs": {"split": "train"}
-    },
-    "val": {
-      "target": "src.dataloader.challenge_one_dataloader.Sat2RadDataset",
-      "kwargs": {"split": "val"}
+      "kwargs": {"split": "test"}
     }
   },
   "dataloader": {
-    "train": {
-      "kwargs": {
-        "batch_size": 1,
-        "shuffle": false,
-        "num_workers": 0
-      }
-    },
-    "val": {
+    "test": {
       "kwargs": {
         "batch_size": 1,
         "shuffle": false,
@@ -40,11 +23,7 @@
     }
   },
   "loss": {
-    "train": {
-      "target": "src.util.loss.L1",
-      "kwargs": {}
-    },
-    "val": {
+    "test": {
       "target": "src.util.loss.L1",
       "kwargs": {}
     }
