@@ -72,6 +72,7 @@ def create_dataloader(
     )
 
 
+@torch.no_grad()
 def test(
     config: dict,
     **kwargs
@@ -91,8 +92,6 @@ def test(
     os.makedirs(sub_dir_2019)
     os.makedirs(sub_dir_2020)
 
-    breakpoint()
-
     if config['logging']["wandb"]["log"] == True:
 
         wandb.login(key=config['logging']["wandb"]["api_key"])
@@ -104,134 +103,54 @@ def test(
         )
 
     model:nn.Module  = create_module(config['model']['target'],            **config['model']['kwargs'])
-    train_dataset    = create_module(config['dataset']['train']['target'], **config['dataset']['train']['kwargs'])
-    val_dataset      = create_module(config['dataset']['val']['target']  , **config['dataset']['val']['kwargs'])
-    
-    train_dataloader = create_dataloader(train_dataset, **config['dataloader']['train']['kwargs'])
-    val_dataloader   = create_dataloader(val_dataset  , **config['dataloader']['val']['kwargs'])
+    dataset          = create_module(config['dataset']['test']['target'], **config['dataset']['test']['kwargs'])
+    dataloader       = create_dataloader(dataset,             **config['dataloader']['test']['kwargs'])
 
-    # define loss function and optimizer
-    train_loss: torch.nn.Module = create_module(config['loss']['train']['target'], **config['loss']['train']['kwargs'])
-    val_loss  : torch.nn.Module = create_module(config['loss']['val']['target'],   **config['loss']['val']['kwargs'])
-
-    # use to save model checkpoints
-    best_val_loss = float("inf")
-    num_epochs    = int(config['global']['num_epochs'])
-    device        = int(config['global']['device'])
-
-    module_path, class_name = config['optimizer']['target'].rsplit('.', 1)
-    module                  = importlib.import_module(module_path)
-    _class                  = getattr(module, class_name)
-    optimizer:nn.Module     = _class(model.parameters(), **config["optimizer"]["kwargs"])
-
+    device = int(config['global']['device'])
     model.cuda(device)
+    model.eval()
+
     # model.float()
+    preds = []
 
-    # ---------- training loop ----------
-    for epoch in range(num_epochs):
+    for step, batch in enumerate(
+        tqdm(dataloader, total=len(dataset))
+    ):
 
-        model.train()
+        X: torch.Tensor = batch["X_norm"].cuda()
 
-        for step, batch in enumerate(
-            tqdm(train_dataloader, desc=f"Training: Epoch {epoch+1}/{num_epochs}")
-        ):
+        # forward; [B, C=1, H, W]
+        y_hat:torch.Tensor = model(X)
 
-            X:torch.Tensor = batch["X_norm"].cuda()
-            y:torch.Tensor = batch["y_reg_norm"].cuda()
+        breakpoint()
 
-            # zero gradients
-            optimizer.zero_grad()
+        # logger.log(
+        #     **{
+        #         "global_train_step": len(train_dataloader) * (epoch) + step,
+        #         "global_val_step": None,
+        #         "epoch": epoch,
+        #         "train_loss": loss.item(),
+        #         "val_loss": None,
+        #     }
+        # )
 
-            # forward; [B, C=1, H, W]
-            y_hat:torch.Tensor = model(X)
-
-            print(y.shape, y_hat.shape)
-            loss = train_loss(y_hat, y)
+        # if config['logging']["wandb"]["log"] == True:
             
-            # backprop and step
-            loss.backward()
-            optimizer.step()
+        #     wandb.log(
+        #         {
+        #             "train_loss": loss.item(),
+        #         }
+        #     )
 
-            # logger.log(
-            #     **{
-            #         "global_train_step": len(train_dataloader) * (epoch) + step,
-            #         "global_val_step": None,
-            #         "epoch": epoch,
-            #         "train_loss": loss.item(),
-            #         "val_loss": None,
-            #     }
-            # )
+            # save_fig_step = float(config['logging']['wandb']['save_figure_step'])
+            # if step % save_fig_step == 0:
+            #     # log a 16-image mosaic
+            #     # TODO: one day... add support for flexible callbacks
+            #     y_og = batch["y"]
+            #     opera_input_fig = plot_opera_16hr(y_og)
+            #     wandb.log({"(y) OPERA": wandb.Image(opera_input_fig)})
 
-            if config['logging']["wandb"]["log"] == True:
-                
-                wandb.log(
-                    {
-                        "epoch": epoch,
-                        "train_loss": loss.item(),
-                    }
-                )
-
-                save_fig_step = float(config['logging']['wandb']['save_figure_step'])
-                if step % save_fig_step == 0:
-                    # log a 16-image mosaic
-                    # TODO: one day... add support for flexible callbacks
-                    y_og = batch["y"]
-                    opera_input_fig = plot_opera_16hr(y_og)
-                    wandb.log({"(y) OPERA": wandb.Image(opera_input_fig)})
-
-        # validation
-        model.eval()
-        val_running_loss = 0.0
-        num_val_steps    = 1
-
-        with torch.no_grad():
-
-            for i, batch in enumerate(
-                tqdm(val_dataloader, desc=f"Validation: Epoch {epoch+1}/{num_epochs}")
-            ):
-
-                X:torch.Tensor = batch["X_norm"].cuda()
-                y:torch.Tensor = batch["y_reg_norm"].cuda()
-
-                # predict
-                # - underflowing?
-                y_hat = model(X)
-                loss  = val_loss(y_hat, y)
-
-                # logger.log(
-                #     **{
-                #         "global_train_step": None,
-                #         "global_val_step": len(val_dataloader) * (epoch) + i,
-                #         "epoch": epoch,
-                #         "train_loss": None,
-                #         "val_loss": loss.item(),
-                #     }
-                # )
-                
-                if config['logging']["wandb"]["log"] == True:
-                    
-                    # log some data every step
-                    wandb.log(
-                        {
-                            "epoch": epoch,
-                            "val_loss": loss.item(),
-                        }
-                    )
-
-                    save_fig_step = float(config['logging']['wandb']['save_figure_step'])
-                    if step % save_fig_step == 0:
-                        # log a 16-image mosaic
-                        y_og = batch["y"]
-                        opera_input_fig = plot_opera_16hr(y_og)
-                        wandb.log({"(y) OPERA": wandb.Image(opera_input_fig)})
-
-                # # ++
-                # num_val_steps += 1
-
-            # optional: log best/recent model weights
-            avg_val_loss = val_running_loss / num_val_steps
-
-            # ... handle optional ckpt saving
+    # ... handle optional ckpt saving
 
 
 if __name__ == "__main__":
@@ -247,7 +166,7 @@ if __name__ == "__main__":
         default="",
     )
 
-    args:argparse.Namespace   = parser.parse_args()
+    args: argparse.Namespace = parser.parse_args()
     with open(args.config_fp, 'r') as f:
         config = json.load(f)
     

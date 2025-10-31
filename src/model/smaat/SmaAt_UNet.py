@@ -64,7 +64,7 @@ class SmaAt_UNet(nn.Module):
         self.outc = OutConv(64, self.n_classes)
 
         # NOTE: ours; a little regression head
-        self.linear = nn.Linear(252 ** 2, 1)
+        self.linear = nn.Linear(32 ** 2, 1)
 
     def forward(self, x):
 

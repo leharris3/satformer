@@ -278,20 +278,42 @@ class Sat2RadDataset(Dataset):
         y_tl_scaled  -= (curr_y_diff // 2)
         y_br_scaled  += (32 - (y_br_scaled - y_tl_scaled))
 
+        # --- some samples spill out of bounds
+        if x_br_scaled >= W:
+            x_tl_scaled = W - 32 - 1
+            x_br_scaled = W - 1
+
+        if y_br_scaled >= H:
+            y_tl_scaled = H - 32 - 1
+            y_br_scaled = H - 1
+
+        if x_tl_scaled < 0:
+            x_tl_scaled = 0
+            x_br_scaled = 32
+
+        if y_tl_scaled < 0:
+            y_tl_scaled = 0
+            y_br_scaled = 32
+
+        try:
+            assert x_tl_scaled >= 0 and x_br_scaled < W
+            assert y_tl_scaled >= 0 and y_br_scaled < H
+        except:
+            breakpoint()
+
         assert x_br_scaled - x_tl_scaled == 32
         assert y_br_scaled - y_tl_scaled == 32
-        
-        # HACK: [T=4, C=11, H, W] -> [C=11, H, W]
-        X = X.mean(dim=0)
-
-        # -> [C=11, H=32, W=32]
-        X = X[:, x_tl_scaled:x_br_scaled, y_tl_scaled:y_br_scaled]
-
-        X_norm = scale_zero_to_one(X,     dataset_min=0, dataset_max=self.X_max)
 
         # input (X)
         # 1H HRIT satallite context (can be larger); centered about corresponding area of precipitation
         # - (B, H, W, C, T) -> (B, (32 // 6) + (32 // 6) + 1, 11, 4) -> (B, 6+, 6+, 11, 4)
+
+        # HACK: [T=4, C=11, H, W] -> [C=11, H, W]
+        X = X.mean(dim=0)
+
+        # -> [C=11, H=32, W=32]
+        X      = X[:, x_tl_scaled:x_br_scaled, y_tl_scaled:y_br_scaled]
+        X_norm = scale_zero_to_one(X, dataset_min=0, dataset_max=self.X_max)
 
         return {
             "X"             : X,
