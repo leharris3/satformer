@@ -177,6 +177,20 @@ class ExperimentLogger:
             }
             wandb.log(wandb_dict, step=step)
 
+    def save_weights(
+        self,
+        model: torch.nn.Module,
+        name: str = "best",
+    ) -> None:
+        """
+        Save model weights of a `torch.nn.Module` object to the current exp dir.
+
+        :param model: model to save
+        """
+
+        out_fp = Path(self.exp_dir) / Path(f"{name}.pth")
+        torch.save(model, str(out_fp))
+
 
 if __name__ == "__main__":
     pass

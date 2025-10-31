@@ -16,11 +16,11 @@
   "dataset": {
     "train": {
       "target": "src.dataloader.challenge_one_dataloader.Sat2RadDataset",
-      "kwargs": {"split": "train"}
+      "kwargs": {"split": "train", "steps_per_epoch": 100}
     },
     "val": {
       "target": "src.dataloader.challenge_one_dataloader.Sat2RadDataset",
-      "kwargs": {"split": "val"}
+      "kwargs": {"split": "val", "steps_per_epoch": 100}
     }
   },
   "dataloader": {

@@ -18,7 +18,7 @@ from torch.utils.data import DataLoader
 
 from src.util.logger import ExperimentLogger
 from src.util.plot.opera import plot_opera_16hr
-from src.util.scale import scale_zero_to_one
+from src.util.scale import scale_zero_to_one, undo_scale_zero_to_one
 
 warnings.simplefilter("always")
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -128,22 +128,14 @@ def train(
             # forward; [B, C=1, H, W]
             y_hat:torch.Tensor = model(X)
 
-            print(y.shape, y_hat.shape)
             loss = train_loss(y_hat, y)
             
             # backprop and step
             loss.backward()
             optimizer.step()
 
-            # logger.log(
-            #     **{
-            #         "global_train_step": len(train_dataloader) * (epoch) + step,
-            #         "global_val_step": None,
-            #         "epoch": epoch,
-            #         "train_loss": loss.item(),
-            #         "val_loss": None,
-            #     }
-            # )
+            # calculate loss using original dataset scale; [mm/hr]
+            rescaled_loss = train_loss(undo_scale_zero_to_one(y_hat, 0, train_dataset.y_reg_max), batch["y_reg"].cuda())
 
             if config['logging']["wandb"]["log"] == True:
                 
@@ -151,6 +143,7 @@ def train(
                     {
                         "epoch": epoch,
                         "train_loss": loss.item(),
+                        "train_loss_rescaled": rescaled_loss.item(),
                     }
                 )
 
@@ -177,19 +170,10 @@ def train(
                 y:torch.Tensor = batch["y_reg_norm"].cuda()
 
                 # predict
-                # - underflowing?
-                y_hat = model(X)
-                loss  = val_loss(y_hat, y)
-
-                # logger.log(
-                #     **{
-                #         "global_train_step": None,
-                #         "global_val_step": len(val_dataloader) * (epoch) + i,
-                #         "epoch": epoch,
-                #         "train_loss": None,
-                #         "val_loss": loss.item(),
-                #     }
-                # )
+                y_hat         = model(X)
+                loss          = val_loss(y_hat, y)
+                rescaled_loss = val_loss(undo_scale_zero_to_one(y_hat, 0, train_dataset.y_reg_max), batch["y_reg"].cuda())
+                # note, we still want to use trainset set stats to rescale ^^
                 
                 if config['logging']["wandb"]["log"] == True:
                     
@@ -198,6 +182,7 @@ def train(
                         {
                             "epoch": epoch,
                             "val_loss": loss.item(),
+                            "val_loss_rescaled": rescaled_loss.item(),
                         }
                     )
 
@@ -208,13 +193,14 @@ def train(
                         opera_input_fig = plot_opera_16hr(y_og)
                         wandb.log({"(y) OPERA": wandb.Image(opera_input_fig)})
 
-                # # ++
-                # num_val_steps += 1
+                # ++
+                num_val_steps += 1
 
             # optional: log best/recent model weights
             avg_val_loss = val_running_loss / num_val_steps
-
-            # ... handle optional ckpt saving
+            if avg_val_loss < best_val_loss:
+                logger.save_weights(model, name="best")
+                best_val_loss = avg_val_loss
 
 
 if __name__ == "__main__":

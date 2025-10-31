@@ -7,6 +7,7 @@ import argparse
 import warnings
 import yaml
 import json
+import subprocess
 import pandas as pd
 
 import torch
@@ -25,7 +26,7 @@ warnings.simplefilter("always")
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 
-SUBMISSION_FOLDER_SUBDIR = "submission-bins-128-all-regions"
+SUBMISSION_FOLDER_SUBDIR = "submission-bins-1-all-regions"
 
 
 def create_module(target: str, **kwargs) -> Any:
@@ -108,6 +109,11 @@ def test(
     dataloader       = create_dataloader(dataset,                         **config['dataloader']['test']['kwargs'])
 
     device = int(config['global']['device'])
+    
+    # HACK:
+    model_fp = "/playpen-ssd/levi/w4c/w4c-25/__exps__/2025-10-31_11-17-43_norm inputs/best.pth"
+    model    = torch.load(model_fp, weights_only=False)
+
     model.cuda(device)
     model.eval()
 
@@ -122,14 +128,17 @@ def test(
         # forward; [B, C=1, H, W]
         y_hat:torch.Tensor = model(X)
         y_hat_scaled = undo_scale_zero_to_one(y_hat, 0, dataset.y_reg_max)
-        
 
-        csv_fp = submission_dir / Path(f"{batch['file_name'][0].split(".")[0]}.test.cum4h.csv")
+        # HACK
+        if not (y_hat_scaled > 0):
+            y_hat_scaled = torch.Tensor([0])
+
+        csv_fp = submission_dir / Path(f"{batch["year"].item()}") / Path(f"{batch['file_name'][0].split(".")[0]}.test.cum4h.csv")
         if csv_fp not in preds: preds[csv_fp] = []
 
         # HACK:
         # [Case-ID, amount (mm/hr), cum_prob]
-        preds[csv_fp].append([batch['Case-id'][0], y_hat.item(), 1])
+        preds[csv_fp].append([batch['Case-id'][0], y_hat_scaled.item(), 1])
 
         # if config['logging']["wandb"]["log"] == True:
             
@@ -139,19 +148,17 @@ def test(
         #         }
         #     )
 
-            # save_fig_step = float(config['logging']['wandb']['save_figure_step'])
-            # if step % save_fig_step == 0:
-            #     # log a 16-image mosaic
-            #     # TODO: one day... add support for flexible callbacks
-            #     y_og = batch["y"]
-            #     opera_input_fig = plot_opera_16hr(y_og)
-            #     wandb.log({"(y) OPERA": wandb.Image(opera_input_fig)})
-
     # save all predictions as csvs
     for k, v in preds.items():
         df = pd.DataFrame(v)
         df.to_csv(k, index=False, header=False)
-    
+
+    # cd into exp dir
+    os.chdir(str(submission_dir))
+
+    # store as zip
+    command = ["zip", "-r", "../submission-bins-1-all-regions.zip", ".", "i", "*"]
+    subprocess.run(command)
 
 if __name__ == "__main__":
 
