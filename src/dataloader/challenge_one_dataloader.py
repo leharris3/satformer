@@ -65,13 +65,13 @@ class Sat2RadDataset(Dataset):
 
                 name = Path(op_fp).name
                 name = name.split(".")[0]
-                if name not in all_fp_dict:
-                    all_fp_dict[name] = {
+                if name not in self.all_fp_dict:
+                    self.all_fp_dict[name] = {
                         "opera": op_fp,
                         "hrit" : None,
                     }
                 else:
-                    all_fp_dict[name]['opera'] = op_fp
+                    self.all_fp_dict[name]['opera'] = op_fp
 
         for hr_fp in all_hrit_fps:
 
@@ -168,8 +168,6 @@ class Sat2RadDataset(Dataset):
 
     def get_item_train_val(self, index: int) -> dict:
 
-        # TODO: randomly crop a H=32, W=32 slice from X, y
-
         # choose rand idx in [0, ..., # datasets)
         rand_idx = random.randint(0, len(self.hrit_buffer) - 1)
 
@@ -197,6 +195,15 @@ class Sat2RadDataset(Dataset):
         # NOTE: clip @0; it can't rain a negative amount; large negative values in our datasets
         y = y.clip(0)
 
+        # --- choose random (32x32) spatial crop
+
+        _, H, W = X.shape
+        H_prime = random.randint(0, H - 32 - 1)
+        W_prime = random.randint(0, W - 32 - 1)
+
+        X = X[:,    H_prime:H_prime+32, W_prime:W_prime+32]
+        y = y[:, :, H_prime:H_prime+32, W_prime:W_prime+32]
+
         # wfc challenge #1 target
         # - average hourly cummulative rainfall
         # - individual feature maps (H, W) are 15 minute accumulated rainfall
@@ -206,13 +213,15 @@ class Sat2RadDataset(Dataset):
         
         # [T, C=1, H, W] -> [T, H, W]
         y_reg = y.squeeze(1)
-        y_reg = y_reg.sum(dim=(1, 2)) # [T]; cummulative 15M rainfall
+        y_reg = y_reg.sum(dim=(1, 2)) # [T]; cummulative 15M rainfall; total rainfall that fell over the sub-region over the past 15 minutes
         y_reg = y_reg * 4             # [T]; cummulative 1H rainfall
         y_reg = y_reg.mean()          # [T]; average cummulative 1H rainfall
 
         X_norm     = scale_zero_to_one(X,     dataset_min=0, dataset_max=self.X_max)
         y_norm     = scale_zero_to_one(y,     dataset_min=0, dataset_max=self.y_max)
-        y_reg_norm = scale_zero_to_one(y_reg, dataset_min=0, dataset_max=self.y_reg_max)
+
+        # NOTE: recalculating dataset stats
+        # y_reg_norm = scale_zero_to_one(y_reg, dataset_min=0, dataset_max=self.y_reg_max)
 
         # input (X)
         # 1H HRIT satallite context (can be larger); centered about corresponding area of precipitation
@@ -229,7 +238,7 @@ class Sat2RadDataset(Dataset):
             "y_reg" : y_reg,
             "X_norm": X_norm,
             "y_norm": y_norm,
-            "y_reg_norm": y_reg_norm
+            # "y_reg_norm": y_reg_norm
         }
     
     def get_item_test(self, index: int) -> dict:
@@ -326,6 +335,7 @@ class Sat2RadDataset(Dataset):
             "x-bottom-right": x_br,
             "y-top-left"    : y_tl,
             "y-bottom-right": y_br,
+            "file_name"     : key,
         }
 
     def __getitem__(self, index: int) -> dict:
@@ -336,19 +346,8 @@ class Sat2RadDataset(Dataset):
             return self.get_item_test(index)
 
 
-class ChallengeOneTestSet(Dataset):
-
-    def __init__(self):
-        super().__init__()
-
-    def __len__(): return -1
-
-    def __getitem__(self, index):
-        return {}
-    
-
 if __name__ == "__main__":
 
-    ds   = Sat2RadDataset(split="test")
+    ds   = Sat2RadDataset(split="train")
     item = ds.__getitem__(0)
     breakpoint()

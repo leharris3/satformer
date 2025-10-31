@@ -7,6 +7,7 @@ import argparse
 import warnings
 import yaml
 import json
+import pandas as pd
 
 import torch
 import torch.nn as nn
@@ -102,16 +103,16 @@ def test(
             name=config['logging']['exp_name'],
         )
 
-    model:nn.Module  = create_module(config['model']['target'],            **config['model']['kwargs'])
+    model:nn.Module  = create_module(config['model']['target'],           **config['model']['kwargs'])
     dataset          = create_module(config['dataset']['test']['target'], **config['dataset']['test']['kwargs'])
-    dataloader       = create_dataloader(dataset,             **config['dataloader']['test']['kwargs'])
+    dataloader       = create_dataloader(dataset,                         **config['dataloader']['test']['kwargs'])
 
     device = int(config['global']['device'])
     model.cuda(device)
     model.eval()
 
     # model.float()
-    preds = []
+    preds = {}
 
     for step, batch in enumerate(
         tqdm(dataloader, total=len(dataset))
@@ -122,17 +123,13 @@ def test(
         # forward; [B, C=1, H, W]
         y_hat:torch.Tensor = model(X)
 
-        breakpoint()
+        csv_fp = submission_dir / Path(f"{batch['file_name'][0].split(".")[0]}.test.cum4h.csv")
+        if csv_fp not in preds: preds[csv_fp] = []
 
-        # logger.log(
-        #     **{
-        #         "global_train_step": len(train_dataloader) * (epoch) + step,
-        #         "global_val_step": None,
-        #         "epoch": epoch,
-        #         "train_loss": loss.item(),
-        #         "val_loss": None,
-        #     }
-        # )
+        # HACK:
+        # [Case-ID, amount (mm/hr), cum_prob]
+        preds[csv_fp].append([batch['Case-id'][0], y_hat.item(), 1])
+        breakpoint()
 
         # if config['logging']["wandb"]["log"] == True:
             
