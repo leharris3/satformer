@@ -19,7 +19,7 @@ from torch.utils.data import DataLoader
 
 from src.util.logger import ExperimentLogger
 from src.util.plot.opera import plot_opera_16hr
-from src.util.scale import scale_zero_to_one
+from src.util.scale import scale_zero_to_one, undo_scale_zero_to_one
 
 warnings.simplefilter("always")
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -111,7 +111,6 @@ def test(
     model.cuda(device)
     model.eval()
 
-    # model.float()
     preds = {}
 
     for step, batch in enumerate(
@@ -122,6 +121,8 @@ def test(
 
         # forward; [B, C=1, H, W]
         y_hat:torch.Tensor = model(X)
+        y_hat_scaled = undo_scale_zero_to_one(y_hat, 0, dataset.y_reg_max)
+        
 
         csv_fp = submission_dir / Path(f"{batch['file_name'][0].split(".")[0]}.test.cum4h.csv")
         if csv_fp not in preds: preds[csv_fp] = []
@@ -129,7 +130,6 @@ def test(
         # HACK:
         # [Case-ID, amount (mm/hr), cum_prob]
         preds[csv_fp].append([batch['Case-id'][0], y_hat.item(), 1])
-        breakpoint()
 
         # if config['logging']["wandb"]["log"] == True:
             
@@ -147,8 +147,11 @@ def test(
             #     opera_input_fig = plot_opera_16hr(y_og)
             #     wandb.log({"(y) OPERA": wandb.Image(opera_input_fig)})
 
-    # ... handle optional ckpt saving
-
+    # save all predictions as csvs
+    for k, v in preds.items():
+        df = pd.DataFrame(v)
+        df.to_csv(k, index=False, header=False)
+    
 
 if __name__ == "__main__":
 

@@ -22,8 +22,7 @@ WFC_C1_TEST_DIR = "weather4cast_data/challenge_one"
 # HACK: hard code normalization stats from training set
 X_MAX     = 336.2159
 Y_MAX     = 603.4000
-Y_REG_MAX = 536120.9375
-
+Y_REG_MAX = 11.9802827835083
 
 class Sat2RadDataset(Dataset):
 
@@ -158,15 +157,30 @@ class Sat2RadDataset(Dataset):
             
             self.test_df             = test_df
 
-        # TODO: quickly calculate rough std normal statistics for X and y sets
-        self.X_max = X_max
-        self.y_max = y_max
+        # TODO: explore more sophisticated input pre-proc.
+        # - currently, we just scale all ins/outs to ~[0, 1] using training set stats
+        self.X_max     = X_max
+        self.y_max     = y_max
         self.y_reg_max = y_reg_max
 
     def __len__(self) -> int: 
         return self.steps_per_epoch
 
     def get_item_train_val(self, index: int) -> dict:
+        """
+        input
+        --- 
+        - (X)
+        - 1H HRIT satallite context (can be larger); centered about corresponding area of precipitation
+        - (B, H, W, C, T) -> (B, (32 // 6) + (32 // 6) + 1, 11, 4) -> (B, 6+, 6+, 11, 4)
+
+        output 
+        ---
+        - (y)
+        - OPERA average, hourly cummulative precipitation for 4H; 32x32 pixels
+        - (B, H, W, C, T) -> (B, 32, 32, 1, 16); layer_last
+        - regression target: (layer_last).mean() * 4; note: we do NOT average across batch dimension
+        """
 
         # choose rand idx in [0, ..., # datasets)
         rand_idx = random.randint(0, len(self.hrit_buffer) - 1)
@@ -185,6 +199,8 @@ class Sat2RadDataset(Dataset):
         X = torch.Tensor(X)
         
         # HACK: [T=4, C=11, H, W] -> [C=11, H, W]
+        # - this is pretty alfull, 
+        # - we just crush the T dim because our baseline model doesn't process temporal info
         X = X.mean(dim=0)
 
         # label: 4H proceeding rainfall
@@ -210,27 +226,24 @@ class Sat2RadDataset(Dataset):
         # - we derive regression targets: 
         # ---- hourly rainfall    : H = (maps) * 4
         # ---- avg hourly rainfall: H/16
+
+        # Cumulative rainfall should be averaged over a 32×32 pixel area of hi-res radar rain rates. 
+        # It should be aggregated over 4h into the future (16 time slots à 15 mins). 
+        # As rain rates are per hour and there are 4 slots à 15 mins per hour, 
+        # that means averaging per hour and summing the 4 hours, 
+        # i.e., averaging the 16 slots and multiplying by 4 (or summing the 16 slots and diving by 4).
         
         # [T, C=1, H, W] -> [T, H, W]
         y_reg = y.squeeze(1)
-        y_reg = y_reg.sum(dim=(1, 2)) # [T]; cummulative 15M rainfall; total rainfall that fell over the sub-region over the past 15 minutes
-        y_reg = y_reg * 4             # [T]; cummulative 1H rainfall
-        y_reg = y_reg.mean()          # [T]; average cummulative 1H rainfall
+        y_reg = y_reg.mean(dim=(1, 2)) # [T]; "should be averaged over a 32×32 pixel area"
+        y_reg = y_reg.sum()            # [T]; "summing the 16 slots"
+        y_reg = y_reg / 4              # [T]; "diving by 4"
 
         X_norm     = scale_zero_to_one(X,     dataset_min=0, dataset_max=self.X_max)
         y_norm     = scale_zero_to_one(y,     dataset_min=0, dataset_max=self.y_max)
 
         # NOTE: recalculating dataset stats
-        # y_reg_norm = scale_zero_to_one(y_reg, dataset_min=0, dataset_max=self.y_reg_max)
-
-        # input (X)
-        # 1H HRIT satallite context (can be larger); centered about corresponding area of precipitation
-        # - (B, H, W, C, T) -> (B, (32 // 6) + (32 // 6) + 1, 11, 4) -> (B, 6+, 6+, 11, 4)
-
-        # output (y)
-        # OPERA average, hourly cummulative precipitation for 4H; 32x32 pixels
-        # - (B, H, W, C, T) -> (B, 32, 32, 1, 16); layer_last
-        # - regression target: (layer_last).mean() * 4; note: we do NOT average across batch dimension
+        y_reg_norm = scale_zero_to_one(y_reg, dataset_min=0, dataset_max=self.y_reg_max)
 
         return {
             "X"     : X,
@@ -238,7 +251,7 @@ class Sat2RadDataset(Dataset):
             "y_reg" : y_reg,
             "X_norm": X_norm,
             "y_norm": y_norm,
-            # "y_reg_norm": y_reg_norm
+            "y_reg_norm": y_reg_norm
         }
     
     def get_item_test(self, index: int) -> dict:
@@ -348,6 +361,21 @@ class Sat2RadDataset(Dataset):
 
 if __name__ == "__main__":
 
-    ds   = Sat2RadDataset(split="train")
-    item = ds.__getitem__(0)
+    # ds   = Sat2RadDataset(split="train")
+    # item = ds.__getitem__(0)
+    # breakpoint()
+
+    NUM_SAMPELS = 1000
+    ds = Sat2RadDataset(split="train")
+
+    X_maxs  = []
+    y_maxs  = []
+    targets = []
+
+    for i in tqdm(range(NUM_SAMPELS)):
+        item  = ds[i]
+        y_reg = item["y_reg"]
+        targets.append(y_reg.item())
+    
+    print(max(targets))
     breakpoint()
