@@ -10,6 +10,8 @@ from src.util.plot.magic import OPERA_15M_QPE_PALLETE, OPERA_15M_QPE_BOUNDARIES
 
 def plot_opera_16hr(X: torch.Tensor, dpi=100):
     """
+    TODO: use `dpi`
+
     args
     ---
     :X: `(B, T=16, 1, H, W)`
@@ -20,6 +22,8 @@ def plot_opera_16hr(X: torch.Tensor, dpi=100):
     """
 
     X = X.clone().detach().cpu()
+
+    # HACK: plot the first sample from the batch
     X = X[0, ...]
 
     # pallete from NSSL MRMS web viewer

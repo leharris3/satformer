@@ -2,6 +2,7 @@ import os
 import torch
 import h5py
 import random
+import warnings
 import numpy as np
 import xarray as xr
 import pandas as pd
@@ -15,6 +16,11 @@ from concurrent.futures import ThreadPoolExecutor
 from src.util.scale import scale_zero_to_one
 
 
+# quite some annoying UserWarnings thrown by xarray 
+# when opening datasets with phony_dims=None
+warnings.simplefilter("ignore")
+
+
 WFC_ROOT_DIR    = "/playpen-ssd/levi/w4c/w4c-25/weather4cast_data"
 WFC_C1_TEST_DIR = "weather4cast_data/challenge_one"
 
@@ -24,7 +30,11 @@ X_MAX     = 336.2159
 Y_MAX     = 603.4000
 Y_REG_MAX = 11.9802827835083
 
+
 class Sat2RadDataset(Dataset):
+
+    TOTAL_TRAIN_T = 163820
+    TOTAL_VAL_T   = 755
 
     def __init__(
             self, 
@@ -41,11 +51,11 @@ class Sat2RadDataset(Dataset):
         if not split in ['train', 'val', 'test']: 
             raise Exception(f"Invalid split: {split}")
         
+        self.steps_per_epoch = steps_per_epoch
+        
         # modify to keyword for challenge one (cum. precip) data
         if self.split == "test":
             split = "cum1test"
-
-        self.steps_per_epoch = steps_per_epoch
         
         opera_regex   = f"{WFC_ROOT_DIR}/**/*{split}*rates*h5"
         hrit_regex    = f"{WFC_ROOT_DIR}/**/*{split}*reflbt0*h5"
@@ -107,14 +117,17 @@ class Sat2RadDataset(Dataset):
         # [B, T2, 252, 252, 1]
         self.opera_buffer: List[xr.Dataset] = []
 
+        # we have a lot to think about here
+        # current, we lazy load huge xarray datasets
+        # - samples, once loaded, are NOT cached atm
         if self.split in ['train', 'val']:
 
             for fp_hr, fp_op in tqdm(zip(hrit_fps, opera_fps), desc="Loading dataset...", total=len(hrit_fps)):
                 
-                ds = xr.open_dataset(fp_hr, phony_dims='sort')
+                ds = xr.open_dataset(fp_hr, phony_dims=None, chunks="auto", create_default_indexes=False)
                 self.hrit_buffer.append(ds)
 
-                ds = xr.open_dataset(fp_op, phony_dims='sort')
+                ds = xr.open_dataset(fp_op, phony_dims=None, chunks="auto", create_default_indexes=False)
                 self.opera_buffer.append(ds)
 
         # NOTE: we only have HRIT inputs for the test set
@@ -154,16 +167,30 @@ class Sat2RadDataset(Dataset):
 
             if self.steps_per_epoch != len(test_df): print(f"Warning: changing steps-per-epoch from {self.steps_per_epoch} -> {len(test_df)}")
             self.steps_per_epoch     = len(test_df)
-            
             self.test_df             = test_df
 
         # TODO: explore more sophisticated input pre-proc.
         # - currently, we just scale all ins/outs to ~[0, 1] using training set stats
-        self.X_max     = X_max
-        self.y_max     = y_max
-        self.y_reg_max = y_reg_max
+        self.X_max      = X_max
+        self.y_max      = y_max
+        self.y_reg_max  = y_reg_max
 
-    def __len__(self) -> int: 
+        # each dataset covers a unique spatial region
+        # we access datasets consecutively (i.e., 0, 1, ... n)
+        # this is much faster when loading data lazily with xarray/dask
+        self.region_idx = 0
+        self.sample_idx = 0 # keep track of which sample we're pointing to in the current region's dataset
+
+        # calculate the sum of the temporal dim shapes (T) across all regions
+        if self.split in ['train', 'val']:
+            total_T = 0
+            for hrit_ds, opera_ds in zip(self.hrit_buffer, self.opera_buffer):
+                T = min(hrit_ds['REFL-BT'].shape[0], opera_ds['rates.crop'].shape[0])
+                total_T += T
+            # print(f"Warning: changing steps-per-epoch from {self.steps_per_epoch} -> {total_T // 20}")
+            self.total_T = total_T
+
+    def __len__(self) -> int:
         return self.steps_per_epoch
 
     def get_item_train_val(self, index: int) -> dict:
@@ -176,56 +203,77 @@ class Sat2RadDataset(Dataset):
 
         output 
         ---
-        - (y)
-        - OPERA average, hourly cummulative precipitation for 4H; 32x32 pixels
+        - (y) OPERA average, hourly cummulative precipitation for 4H; 32x32 pixels
         - (B, H, W, C, T) -> (B, 32, 32, 1, 16); layer_last
-        - regression target: (layer_last).mean() * 4; note: we do NOT average across batch dimension
         """
 
-        # choose rand idx in [0, ..., # datasets)
-        rand_idx = random.randint(0, len(self.hrit_buffer) - 1)
+        # TODO:
+        # - contact organizers
+        # - T1, T2 are DIFFERENT for trainset (T2 < T1)
+        # - verify that index starts at 0 for both datasets
 
         # [T1, 11, 252, 252]
-        hrit_ds  = self.hrit_buffer[rand_idx]['REFL-BT']
+        hrit_ds  = self.hrit_buffer[self.region_idx]['REFL-BT']
         
-        # [T2, 1, 252, 252]; T2<=T1 typically
-        opera_ds = self.opera_buffer[rand_idx]['rates.crop']
+        # [T2, 1, 252, 252]
+        opera_ds = self.opera_buffer[self.region_idx]['rates.crop']
 
+        # calculate starting temporal index of this sample
+        start_T = (20 * self.sample_idx)
         T       = min(hrit_ds.shape[0], opera_ds.shape[0])
-        start_T = random.randint(0, T-20)
+        
+        # NOTE:  divide total T sequence into T // 20 non-overlapping windows; 
+        # - much faster to access neighboring T when lazy loading from xarray.Dataset objs
+        if start_T >= T - 20:
+                
+            # reset the current sample idx for a new region
+            self.sample_idx = 0
+            
+            # ++ next region
+            self.region_idx += 1
+
+            # [T1, 11, 252, 252]
+            hrit_ds  = self.hrit_buffer[self.region_idx]['REFL-BT']
+            
+            # [T2, 1, 252, 252]; T2<=T1 typically
+            opera_ds = self.opera_buffer[self.region_idx]['rates.crop']
+
+            start_T = 0
+            T       = min(hrit_ds.shape[0], opera_ds.shape[0])
+        
+        # ++ sample idx for the current region
+        self.sample_idx += 1
+
+        # --- choose random (32x32) spatial crop
+        H, W = 252, 252
+        H_prime = random.randint(0, H - 32 - 1)
+        W_prime = random.randint(0, W - 32 - 1)
+
+        # X = X[:, :, H_prime:H_prime+32, W_prime:W_prime+32]
+        # y = y[:, :, H_prime:H_prime+32, W_prime:W_prime+32]
+
+        # HACK: this stupid thing keeps the buffer open enough (~3-4x speed ups)
+        self.hrit_buffer[ self.region_idx]['REFL-BT'][   start_T: start_T+500, ...]
+        self.opera_buffer[self.region_idx]['rates.crop'][start_T: start_T+500, ...]
 
         # input: 1H satellite data
-        X = hrit_ds[start_T:start_T+4, ...].to_numpy()
+        X = hrit_ds[start_T:start_T+4, :, H_prime:H_prime+32, W_prime:W_prime+32].to_numpy()
         X = torch.Tensor(X)
-        
-        # HACK: [T=4, C=11, H, W] -> [C=11, H, W]
-        # - this is pretty alfull, 
-        # - we just crush the T dim because our baseline model doesn't process temporal info
-        X = X.mean(dim=0)
 
         # label: 4H proceeding rainfall
         # [T=16, C=1, H=252, W=252]
-        y = opera_ds[start_T+4:start_T+20].to_numpy()
+        y = opera_ds[start_T+4:start_T+20, :, H_prime:H_prime+32, W_prime:W_prime+32].to_numpy()
         y = torch.Tensor(y)
 
         # NOTE: clip @0; it can't rain a negative amount; large negative values in our datasets
         y = y.clip(0)
 
-        # --- choose random (32x32) spatial crop
-
-        _, H, W = X.shape
-        H_prime = random.randint(0, H - 32 - 1)
-        W_prime = random.randint(0, W - 32 - 1)
-
-        X = X[:,    H_prime:H_prime+32, W_prime:W_prime+32]
-        y = y[:, :, H_prime:H_prime+32, W_prime:W_prime+32]
-
         # wfc challenge #1 target
-        # - average hourly cummulative rainfall
-        # - individual feature maps (H, W) are 15 minute accumulated rainfall
-        # - we derive regression targets: 
-        # ---- hourly rainfall    : H = (maps) * 4
-        # ---- avg hourly rainfall: H/16
+        # * average hourly cummulative rainfall
+        # * individual feature maps (H, W) are 15 minute accumulated rainfall
+        # * we derive regression targets: 
+        #   *  hourly rainfall    : H = (maps) * 4
+        #   *  avg hourly rainfall: H/16
 
         # Cumulative rainfall should be averaged over a 32×32 pixel area of hi-res radar rain rates. 
         # It should be aggregated over 4h into the future (16 time slots à 15 mins). 
@@ -235,22 +283,23 @@ class Sat2RadDataset(Dataset):
         
         # [T, C=1, H, W] -> [T, H, W]
         y_reg = y.squeeze(1)
-        y_reg = y_reg.mean(dim=(1, 2)) # [T]; "should be averaged over a 32×32 pixel area"
-        y_reg = y_reg.sum()            # [T]; "summing the 16 slots"
-        y_reg = y_reg / 4              # [T]; "diving by 4"
+        y_reg = y_reg.mean(dim=(1, 2)) # "should be averaged over a 32×32 pixel area"
+        y_reg = y_reg.sum()            # "summing the 16 slots"
+        y_reg = y_reg / 4              #  "diving by 4"
+        y_reg = y_reg.unsqueeze(0)     # -> [1]
 
         X_norm     = scale_zero_to_one(X,     dataset_min=0, dataset_max=self.X_max)
         y_norm     = scale_zero_to_one(y,     dataset_min=0, dataset_max=self.y_max)
 
-        # NOTE: recalculating dataset stats
+        # -> [0, 1]
         y_reg_norm = scale_zero_to_one(y_reg, dataset_min=0, dataset_max=self.y_reg_max)
 
         return {
-            "X"     : X,
-            "y"     : y,
-            "y_reg" : y_reg,
-            "X_norm": X_norm,
-            "y_norm": y_norm,
+            "X"         : X,
+            "y"         : y,
+            "y_reg"     : y_reg,
+            "X_norm"    : X_norm,
+            "y_norm"    : y_norm,
             "y_reg_norm": y_reg_norm
         }
     
@@ -331,7 +380,7 @@ class Sat2RadDataset(Dataset):
         # - (B, H, W, C, T) -> (B, (32 // 6) + (32 // 6) + 1, 11, 4) -> (B, 6+, 6+, 11, 4)
 
         # HACK: [T=4, C=11, H, W] -> [C=11, H, W]
-        X = X.mean(dim=0)
+        # X = X.mean(dim=0)
 
         # -> [C=11, H=32, W=32]
         X      = X[:, x_tl_scaled:x_br_scaled, y_tl_scaled:y_br_scaled]
@@ -361,21 +410,10 @@ class Sat2RadDataset(Dataset):
 
 if __name__ == "__main__":
 
-    # ds   = Sat2RadDataset(split="train")
-    # item = ds.__getitem__(0)
-    # breakpoint()
+    NUM_SAMPELS = 2000
+    ds = Sat2RadDataset(split="val", steps_per_epoch=(Sat2RadDataset.TOTAL_VAL_T // 20) -1)
+    import torch
 
-    NUM_SAMPELS = 1000
-    ds = Sat2RadDataset(split="train")
-
-    X_maxs  = []
-    y_maxs  = []
-    targets = []
-
-    for i in tqdm(range(NUM_SAMPELS)):
-        item  = ds[i]
-        y_reg = item["y_reg"]
-        targets.append(y_reg.item())
-    
-    print(max(targets))
-    breakpoint()
+    dl = torch.utils.data.DataLoader(ds, batch_size=16, num_workers=16)
+    for batch in tqdm(dl):
+        pass

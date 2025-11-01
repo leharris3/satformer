@@ -119,8 +119,8 @@ def train(
             tqdm(train_dataloader, desc=f"Training: Epoch {epoch+1}/{num_epochs}")
         ):
 
-            X:torch.Tensor = batch["X_norm"].cuda()
-            y:torch.Tensor = batch["y_reg_norm"].cuda()
+            X:torch.Tensor = batch["X_norm"].cuda(device)
+            y:torch.Tensor = batch["y_reg_norm"].cuda(device)
 
             # zero gradients
             optimizer.zero_grad()
@@ -135,7 +135,7 @@ def train(
             optimizer.step()
 
             # calculate loss using original dataset scale; [mm/hr]
-            rescaled_loss = train_loss(undo_scale_zero_to_one(y_hat, 0, train_dataset.y_reg_max), batch["y_reg"].cuda())
+            rescaled_loss = train_loss(undo_scale_zero_to_one(y_hat, 0, train_dataset.y_reg_max), batch["y_reg"].cuda(device))
 
             if config['logging']["wandb"]["log"] == True:
                 
@@ -166,13 +166,13 @@ def train(
                 tqdm(val_dataloader, desc=f"Validation: Epoch {epoch+1}/{num_epochs}")
             ):
 
-                X:torch.Tensor = batch["X_norm"].cuda()
-                y:torch.Tensor = batch["y_reg_norm"].cuda()
+                X:torch.Tensor = batch["X_norm"].cuda(device)
+                y:torch.Tensor = batch["y_reg_norm"].cuda(device)
 
                 # predict
                 y_hat         = model(X)
                 loss          = val_loss(y_hat, y)
-                rescaled_loss = val_loss(undo_scale_zero_to_one(y_hat, 0, train_dataset.y_reg_max), batch["y_reg"].cuda())
+                rescaled_loss = val_loss(undo_scale_zero_to_one(y_hat, 0, train_dataset.y_reg_max), batch["y_reg"].cuda(device))
                 # note, we still want to use trainset set stats to rescale ^^
                 
                 if config['logging']["wandb"]["log"] == True:

@@ -1,0 +1,80 @@
+{
+  "global": {
+    "num_epochs": 200,
+    "device": 3
+  },
+  "model": {
+    "target": "src.model.timesformer.timesformer_pytorch.TimeSformer",
+    "kwargs": {
+      "dim": 512,
+      "channels": 11,
+      "image_size": 32,
+      "patch_size": 4,
+      "num_frames": 4,
+      "num_classes": 1,
+      "depth": 12,
+      "heads": 8,
+      "dim_head": 64,
+      "attn_dropout": 0.1,
+      "ff_dropout": 0.1
+    }
+  },
+  "optimizer": {
+    "target": "torch.optim.Adam",
+    "kwargs": {
+      "lr": 1e-5
+    }
+  },
+  "dataset": {
+    "train": {
+      "target": "src.dataloader.challenge_one_dataloader.Sat2RadDataset",
+      "kwargs": {
+        "split": "train", 
+        "steps_per_epoch": 8190
+      }
+    },
+    "val": {
+      "target": "src.dataloader.challenge_one_dataloader.Sat2RadDataset",
+      "kwargs": {
+        "split": "val", 
+        "steps_per_epoch": 755
+      }
+    }
+  },
+  "dataloader": {
+    "train": {
+      "kwargs": {
+        "batch_size": 64,
+        "shuffle": false,
+        "num_workers": 0
+      }
+    },
+    "val": {
+      "kwargs": {
+        "batch_size": 64,
+        "shuffle": false,
+        "num_workers": 0
+      }
+    }
+  },
+  "loss": {
+    "train": {
+      "target": "src.util.loss.L1",
+      "kwargs": {}
+    },
+    "val": {
+      "target": "src.util.loss.L1",
+      "kwargs": {}
+    }
+  },
+  "logging": {
+    "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
+    "exp_name": "timesformer-reg-test",
+    "log_interval": 100,
+    "wandb": {
+      "log": true,
+      "api_key": "3d8c09b359c1abc995fd03c27398c41afce857c1",
+      "save_figure_step": 100
+    }
+  }
+}
