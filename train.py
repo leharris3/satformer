@@ -20,8 +20,11 @@ from src.util.logger import ExperimentLogger
 from src.util.plot.opera import plot_opera_16hr
 from src.util.scale import scale_zero_to_one, undo_scale_zero_to_one
 
-warnings.simplefilter("always")
+
 torch.multiprocessing.set_sharing_strategy("file_system")
+
+# quite some annoying UnsupportedFieldAttributeWarnings
+warnings.simplefilter("ignore")
 
 
 def create_module(target: str, **kwargs) -> Any:

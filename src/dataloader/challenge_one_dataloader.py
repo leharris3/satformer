@@ -34,12 +34,11 @@ Y_REG_MAX = 11.9802827835083
 class Sat2RadDataset(Dataset):
 
     TOTAL_TRAIN_T = 163820
-    TOTAL_VAL_T   = 755
+    TOTAL_VAL_T   = 15100
 
     def __init__(
             self, 
             split="train",
-            steps_per_epoch:int=100,
             X_max=X_MAX,
             y_max=Y_MAX,
             y_reg_max=Y_REG_MAX,
@@ -51,7 +50,12 @@ class Sat2RadDataset(Dataset):
         if not split in ['train', 'val', 'test']: 
             raise Exception(f"Invalid split: {split}")
         
-        self.steps_per_epoch = steps_per_epoch
+        if   split == "train":
+            self.steps_per_epoch = Sat2RadDataset.TOTAL_TRAIN_T // 20
+        elif split == "val":
+            self.steps_per_epoch = Sat2RadDataset.TOTAL_VAL_T   // 20
+        else:
+            raise Exception("Yo Levi implement this")
         
         # modify to keyword for challenge one (cum. precip) data
         if self.split == "test":
