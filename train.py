@@ -113,6 +113,8 @@ def train(
     model.cuda(device)
     # model.float()
 
+    y_label_str      = "y_reg_norm"
+
     # ---------- training loop ----------
     for epoch in range(num_epochs):
 
@@ -123,7 +125,7 @@ def train(
         ):
 
             X:torch.Tensor = batch["X_norm"].cuda(device)
-            y:torch.Tensor = batch["y_reg_norm"].cuda(device)
+            y:torch.Tensor = batch[y_label_str].cuda(device)
 
             # zero gradients
             optimizer.zero_grad()
@@ -170,7 +172,7 @@ def train(
             ):
 
                 X:torch.Tensor = batch["X_norm"].cuda(device)
-                y:torch.Tensor = batch["y_reg_norm"].cuda(device)
+                y:torch.Tensor = batch[y_label_str].cuda(device)
 
                 # predict
                 y_hat         = model(X)

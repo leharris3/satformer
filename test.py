@@ -111,7 +111,7 @@ def test(
     device = int(config['global']['device'])
     
     # HACK:
-    model_fp = "/playpen-ssd/levi/w4c/w4c-25/__exps__/2025-10-31_11-17-43_norm inputs/best.pth"
+    model_fp = "/playpen-ssd/levi/w4c/w4c-25/__exps__/2025-11-01_18-11-20_timesformer-reg-bs=1-loss=l1/best.pth"
     model    = torch.load(model_fp, weights_only=False)
 
     model.cuda(device)
@@ -126,8 +126,11 @@ def test(
         X: torch.Tensor = batch["X_norm"].cuda()
 
         # forward; [B, C=1, H, W]
-        y_hat:torch.Tensor = model(X)
-        y_hat_scaled = undo_scale_zero_to_one(y_hat, 0, dataset.y_reg_max)
+        try:
+            y_hat:torch.Tensor = model(X)
+        except: breakpoint()
+        
+        y_hat_scaled       = undo_scale_zero_to_one(y_hat, 0, dataset.y_reg_max)
 
         # HACK
         if not (y_hat_scaled > 0):

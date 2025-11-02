@@ -33,8 +33,11 @@ Y_REG_MAX = 11.9802827835083
 
 class Sat2RadDataset(Dataset):
 
-    TOTAL_TRAIN_T = 163820
-    TOTAL_VAL_T   = 15100
+    TOTAL_TRAIN_T  = 163820
+    TOTAL_VAL_T    = 15100
+    
+    # [0, 4, ..., 512]; for one-hot encoding
+    PRECIP_BUCKETS = np.arange(0, 512 + 4, 4)
 
     def __init__(
             self, 
@@ -55,7 +58,7 @@ class Sat2RadDataset(Dataset):
         elif split == "val":
             self.steps_per_epoch = Sat2RadDataset.TOTAL_VAL_T   // 20
         else:
-            raise Exception("Yo Levi implement this")
+            self.steps_per_epoch = 120
         
         # modify to keyword for challenge one (cum. precip) data
         if self.split == "test":
@@ -196,6 +199,32 @@ class Sat2RadDataset(Dataset):
 
     def __len__(self) -> int:
         return self.steps_per_epoch
+    
+    def get_cat_label(self, y: float) -> torch.Tensor:
+        """
+        args
+        ---
+        :y: float (original regression target)
+
+        returns
+        ---
+        :torch.Tensor: one hot categorcial label
+        """
+
+        # if y < 0: y = 0
+        y = max(y, 0)
+
+        # if y > 512: y = 512
+        y = min(y, 512)
+
+        # round y to the nearest whole multiple of 4
+        y = int(round(y / 4) * 4)
+        i = y // 4
+        
+        one_hot_label    = torch.zeros(Sat2RadDataset.PRECIP_BUCKETS.shape)
+        one_hot_label[i] = 1
+
+        return one_hot_label
 
     def get_item_train_val(self, index: int) -> dict:
         """
@@ -236,6 +265,10 @@ class Sat2RadDataset(Dataset):
             # ++ next region
             self.region_idx += 1
 
+            # reset if we've passed through all regions
+            if self.region_idx >= len(self.opera_buffer):
+                self.region_idx = 0
+
             # [T1, 11, 252, 252]
             hrit_ds  = self.hrit_buffer[self.region_idx]['REFL-BT']
             
@@ -271,6 +304,7 @@ class Sat2RadDataset(Dataset):
 
         # NOTE: clip @0; it can't rain a negative amount; large negative values in our datasets
         y = y.clip(0)
+        y = y.nan_to_num_()
 
         # wfc challenge #1 target
         # * average hourly cummulative rainfall
@@ -298,13 +332,20 @@ class Sat2RadDataset(Dataset):
         # -> [0, 1]
         y_reg_norm = scale_zero_to_one(y_reg, dataset_min=0, dataset_max=self.y_reg_max)
 
+        # [129]
+        try:
+            y_one_hot_label = self.get_cat_label(y_reg[0].item())
+        except: breakpoint()
+        assert y_one_hot_label.shape[0] == 129
+
         return {
             "X"         : X,
             "y"         : y,
             "y_reg"     : y_reg,
             "X_norm"    : X_norm,
             "y_norm"    : y_norm,
-            "y_reg_norm": y_reg_norm
+            "y_reg_norm": y_reg_norm,
+            "y_reg_oh"  : y_one_hot_label
         }
     
     def get_item_test(self, index: int) -> dict:
@@ -330,12 +371,17 @@ class Sat2RadDataset(Dataset):
         # [T1, 11, 252, 252]
         hrit_ds  = self.hrit_test_dict[key]['REFL-BT']
 
+        # HACK: it looks like the organizers gave us one out of bounds slot
+        if slot_end >= hrit_ds.shape[0]:
+            slot_end   = hrit_ds.shape[0]
+            slot_start = slot_end - 4
+
         # input: 1H satellite data
         X = hrit_ds[slot_start:slot_end, ...].to_numpy()
         X = torch.Tensor(X)
 
         T, C, H, W  = X.shape
-
+        
         # 1 HRIT PX = 6x6 OPERA pixels
         x_tl_scaled = int((x_tl / 6).item())
         x_br_scaled = int((x_br / 6).item())
@@ -383,11 +429,8 @@ class Sat2RadDataset(Dataset):
         # 1H HRIT satallite context (can be larger); centered about corresponding area of precipitation
         # - (B, H, W, C, T) -> (B, (32 // 6) + (32 // 6) + 1, 11, 4) -> (B, 6+, 6+, 11, 4)
 
-        # HACK: [T=4, C=11, H, W] -> [C=11, H, W]
-        # X = X.mean(dim=0)
-
-        # -> [C=11, H=32, W=32]
-        X      = X[:, x_tl_scaled:x_br_scaled, y_tl_scaled:y_br_scaled]
+        # -> [C=11, T=4, H=32, W=32]
+        X      = X[:, :, x_tl_scaled:x_br_scaled, y_tl_scaled:y_br_scaled]
         X_norm = scale_zero_to_one(X, dataset_min=0, dataset_max=self.X_max)
 
         return {
@@ -413,11 +456,27 @@ class Sat2RadDataset(Dataset):
 
 
 if __name__ == "__main__":
-
-    NUM_SAMPELS = 2000
-    ds = Sat2RadDataset(split="val", steps_per_epoch=(Sat2RadDataset.TOTAL_VAL_T // 20) -1)
+    
     import torch
 
+    ds = Sat2RadDataset(split="train")
     dl = torch.utils.data.DataLoader(ds, batch_size=16, num_workers=16)
-    for batch in tqdm(dl):
-        pass
+    
+    labels = None
+    for sample in tqdm(dl):
+        y = sample["y_reg_norm"]
+        if labels == None: labels = y.squeeze()
+        else: labels = torch.cat([labels, y.squeeze()])
+    for sample in tqdm(dl):
+        y = sample["y_reg_norm"]
+        if labels == None: labels = y.squeeze()
+        else: labels = torch.cat([labels, y.squeeze()])
+    for sample in tqdm(dl):
+        y = sample["y_reg_norm"]
+        if labels == None: labels = y.squeeze()
+        else: labels = torch.cat([labels, y.squeeze()])
+
+    import matplotlib.pyplot as plt
+    plt.hist(labels, bins=129);
+
+    breakpoint()

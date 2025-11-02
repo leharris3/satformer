@@ -29,7 +29,7 @@
   },
   "logging": {
     "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
-    "exp_name": "norm inputs",
+    "exp_name": "timesformer-L1-submission-N=1",
     "log_interval": 100,
     "wandb": {
       "log": false,

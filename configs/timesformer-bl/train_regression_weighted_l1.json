@@ -1,7 +1,7 @@
 {
   "global": {
     "num_epochs": 200,
-    "device": 3
+    "device": 5
   },
   "model": {
     "target": "src.model.timesformer.timesformer_pytorch.TimeSformer",
@@ -22,7 +22,7 @@
   "optimizer": {
     "target": "torch.optim.Adam",
     "kwargs": {
-      "lr": 1e-5
+      "lr": 1e-6
     }
   },
   "dataset": {
@@ -42,23 +42,23 @@
   "dataloader": {
     "train": {
       "kwargs": {
-        "batch_size": 16,
+        "batch_size": 1,
         "shuffle": false,
-        "num_workers": 16
+        "num_workers": 0
       }
     },
     "val": {
       "kwargs": {
-        "batch_size": 16,
+        "batch_size": 1,
         "shuffle": false,
-        "num_workers": 16
+        "num_workers": 0
       }
     }
   },
   "loss": {
     "train": {
-      "target": "src.util.loss.L1",
-      "kwargs": {}
+      "target": "src.util.loss.WeightedL1",
+      "kwargs": {"alpha": 3.333333}
     },
     "val": {
       "target": "src.util.loss.L1",
@@ -67,10 +67,10 @@
   },
   "logging": {
     "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
-    "exp_name": "timesformer-reg-test",
+    "exp_name": "timesformer-reg-bs=1-loss=weightedl1",
     "log_interval": 100,
     "wandb": {
-      "log": false,
+      "log": true,
       "api_key": "3d8c09b359c1abc995fd03c27398c41afce857c1",
       "save_figure_step": 100
     }
