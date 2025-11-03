@@ -111,6 +111,9 @@ def train(
     optimizer:nn.Module     = _class(model.parameters(), **config["optimizer"]["kwargs"])
 
     model.cuda(device)
+
+    train_loss.cuda(device)
+    val_loss.cuda(device)
     # model.float()
 
     y_label_str      = "y_reg_norm"

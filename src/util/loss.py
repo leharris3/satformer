@@ -4,6 +4,8 @@ import torch.nn.functional as F
 import numpy as np
 
 from typing import Optional, Sequence, List
+from scipy.interpolate import PchipInterpolator
+from src.util.kde_helpers import Y_REG_MAG_BINS, Y_REG_FREQ_BINS, weighted_gaussian_kde
 
 
 class MSE(nn.Module):
@@ -24,7 +26,37 @@ class L1(nn.Module):
         return F.l1_loss(x, y)
     
 
-class WeightedL1(nn.Module):
+class FreqWeightedL1(nn.Module):
+
+    def __init__(self, *args, **kwargs):
+
+        super().__init__(*args, **kwargs)
+        
+        # emperical cmf
+        self.cmf = torch.tensor(Y_REG_FREQ_BINS) / torch.tensor(Y_REG_FREQ_BINS).sum()
+        
+        # sum(cmf) ~= 1.0
+        assert (self.cmf.sum() < 1.01) and (self.cmf.sum() > 0.99)
+        
+        self.bins = torch.tensor(Y_REG_MAG_BINS)
+
+        self.eps  = 1 / torch.tensor(Y_REG_FREQ_BINS).sum().item()
+
+        # HACK: hyperparameter
+        self.bandwidth  = 0.05
+
+    def forward(self, preds:torch.Tensor, target:torch.Tensor) -> torch.Tensor:
+
+        # [B, 1]; approximate density of target labels
+        pdf_values   = weighted_gaussian_kde(target, self.bins.to(preds.device), self.cmf.to(preds.device), self.bandwidth).sum(dim=1, keepdim=True) + self.eps
+        loss_weights = 1 / pdf_values
+        errors       = abs(preds - target)
+        w_errors     = errors * loss_weights
+        
+        return w_errors.mean()
+    
+
+class MagWeightedL1(nn.Module):
     """
     Simple l1 variant where we weight by magnitude y
     """
@@ -45,13 +77,15 @@ class CategoricalCrossEntropy(nn.Module):
 
     def forward(self, logits:torch.Tensor, target:torch.Tensor):
         
+
         pred = F.softmax(logits)
         return F.binary_cross_entropy(pred, target)
     
 
 
 if __name__ == "__main__":
-    loss = WeightedL1(0, 1)
-    y = torch.rand(1, 10)
-    y_hat = torch.rand(1, 10)
+
+    loss = FreqWeightedL1()
+    y = torch.linspace(0, 1, 10).unsqueeze(1)
+    y_hat = torch.rand(10, 1)
     loss(y_hat, y)

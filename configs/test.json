@@ -1,6 +1,6 @@
 {
   "global": {
-    "device": 0
+    "device": 3
   },
   "model": {
     "target": "src.model.smaat.SmaAt_UNet.SmaAt_UNet",
@@ -29,7 +29,7 @@
   },
   "logging": {
     "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
-    "exp_name": "timesformer-L1-submission-N=1",
+    "exp_name": "timesformer-KDE-L1-submission-N=1-BS=86",
     "log_interval": 100,
     "wandb": {
       "log": false,

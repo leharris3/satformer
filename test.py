@@ -111,7 +111,7 @@ def test(
     device = int(config['global']['device'])
     
     # HACK:
-    model_fp = "/playpen-ssd/levi/w4c/w4c-25/__exps__/2025-11-01_18-11-20_timesformer-reg-bs=1-loss=l1/best.pth"
+    model_fp = "/playpen-ssd/levi/w4c/w4c-25/__exps__/2025-11-02_20-49-53_timesformer-reg-kde-weighted-l1-bs=86/best.pth"
     model    = torch.load(model_fp, weights_only=False)
 
     model.cuda(device)
@@ -123,7 +123,7 @@ def test(
         tqdm(dataloader, total=len(dataset))
     ):
 
-        X: torch.Tensor = batch["X_norm"].cuda()
+        X: torch.Tensor = batch["X_norm"].cuda(device)
 
         # forward; [B, C=1, H, W]
         try:
@@ -142,14 +142,6 @@ def test(
         # HACK:
         # [Case-ID, amount (mm/hr), cum_prob]
         preds[csv_fp].append([batch['Case-id'][0], y_hat_scaled.item(), 1])
-
-        # if config['logging']["wandb"]["log"] == True:
-            
-        #     wandb.log(
-        #         {
-        #             "train_loss": loss.item(),
-        #         }
-        #     )
 
     # save all predictions as csvs
     for k, v in preds.items():
