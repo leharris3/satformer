@@ -13,7 +13,9 @@ from tqdm import tqdm
 from pathlib import Path
 from torch.utils.data import Dataset
 from concurrent.futures import ThreadPoolExecutor
+
 from src.util.scale import scale_zero_to_one
+from src.dataloader.dataset_stats import X_MIN, X_MAX, X_MEAN, X_STD
 
 
 # quite some annoying UserWarnings thrown by xarray 
@@ -26,7 +28,7 @@ WFC_C1_TEST_DIR = "weather4cast_data/challenge_one"
 
 
 # HACK: hard code normalization stats from training set
-X_MAX     = 336.2159
+# X_MAX     = 336.2159
 Y_MAX     = 603.4000
 Y_REG_MAX = 11.9802827835083
 
@@ -37,7 +39,8 @@ class Sat2RadDataset(Dataset):
     TOTAL_VAL_T    = 15100
     
     # [0, 4, ..., 512]; for one-hot encoding
-    PRECIP_BUCKETS = np.arange(0, 512 + 4, 4)
+    Y_REG_BINS     = np.arange(0, 512 + 4, 4)
+    NUM_Y_REG_BINS = 129
 
     def __init__(
             self, 
@@ -199,12 +202,30 @@ class Sat2RadDataset(Dataset):
 
     def __len__(self) -> int:
         return self.steps_per_epoch
+
+    def scale_X(self, X):
+        
+        for C in range(X.shape[1]):
+            
+            # -> [0, 1]
+            X[:, C, ...] = (X[:, C, ...] - X_MIN[C]) / (X_MAX[C] - X_MIN[C])
+            X[:, C, ...] = (X[:, C, ...] - X_MEAN[C]) / X_STD[C]
+                    
+        return X
     
-    def get_cat_label(self, y: float) -> torch.Tensor:
+    def X_pre_proc(self, X: torch.Tensor) -> torch.Tensor: pass
+
+    def X_post_proc(self, X: torch.Tensor) -> torch.Tensor: pass
+
+    def y_reg_pre_proc(self, X: torch.Tensor) -> torch.Tensor: pass
+
+    def y_reg_post_proc(self, X: torch.Tensor) -> torch.Tensor: pass
+     
+    def get_y_reg_cat_label(self, y_reg: float) -> torch.Tensor:
         """
         args
         ---
-        :y: float (original regression target)
+        :y_reg: float (original regression target)
 
         returns
         ---
@@ -212,38 +233,42 @@ class Sat2RadDataset(Dataset):
         """
 
         # if y < 0: y = 0
-        y = max(y, 0)
+        y_reg = max(y_reg, 0)
 
         # if y > 512: y = 512
-        y = min(y, 512)
+        y_reg = min(y_reg, 512)
 
         # round y to the nearest whole multiple of 4
-        y = int(round(y / 4) * 4)
-        i = y // 4
+        y_reg = int(round(y_reg / 4) * 4)
+        i = y_reg  // 4
         
-        one_hot_label    = torch.zeros(Sat2RadDataset.PRECIP_BUCKETS.shape)
+        one_hot_label    = torch.zeros(Sat2RadDataset.Y_REG_BINS.shape)
         one_hot_label[i] = 1
 
         return one_hot_label
 
     def get_item_train_val(self, index: int) -> dict:
         """
+        from the organizers...
+
+        > *Cumulative rainfall should be averaged over a 32×32 pixel area of hi-res radar rain rates. 
+        It should be aggregated over 4h into the future (16 time slots à 15 mins). 
+        As rain rates are per hour and there are 4 slots à 15 mins per hour, 
+        that means averaging per hour and summing the 4 hours, 
+        i.e., averaging the 16 slots and multiplying by 4 (or summing the 16 slots and diving by 4).*
+
         input
         --- 
-        - (X)
+        - :X:
         - 1H HRIT satallite context (can be larger); centered about corresponding area of precipitation
         - (B, H, W, C, T) -> (B, (32 // 6) + (32 // 6) + 1, 11, 4) -> (B, 6+, 6+, 11, 4)
 
         output 
         ---
-        - (y) OPERA average, hourly cummulative precipitation for 4H; 32x32 pixels
-        - (B, H, W, C, T) -> (B, 32, 32, 1, 16); layer_last
+        - :y:
+        -  OPERA average, hourly cummulative precipitation for 4H; 32x32 pixels
+        - (B, H, W, C, T) -> (B, 32, 32, 1, 16)
         """
-
-        # TODO:
-        # - contact organizers
-        # - T1, T2 are DIFFERENT for trainset (T2 < T1)
-        # - verify that index starts at 0 for both datasets
 
         # [T1, 11, 252, 252]
         hrit_ds  = self.hrit_buffer[self.region_idx]['REFL-BT']
@@ -251,12 +276,18 @@ class Sat2RadDataset(Dataset):
         # [T2, 1, 252, 252]
         opera_ds = self.opera_buffer[self.region_idx]['rates.crop']
 
+        # TODO
+        # * contact organizers
+        # * T1, T2 are DIFFERENT for trainset; (T2 < T1)
+        # * verify that index starts at 0 for both datasets
+        
         # calculate starting temporal index of this sample
         start_T = (20 * self.sample_idx)
         T       = min(hrit_ds.shape[0], opera_ds.shape[0])
         
-        # NOTE:  divide total T sequence into T // 20 non-overlapping windows; 
-        # - much faster to access neighboring T when lazy loading from xarray.Dataset objs
+        # NOTE
+        # * divide total T sequence into T // 20 non-overlapping windows
+        # * much faster to access neighboring T when lazy loading from xarray.Dataset objs
         if start_T >= T - 20:
                 
             # reset the current sample idx for a new region
@@ -281,43 +312,39 @@ class Sat2RadDataset(Dataset):
         # ++ sample idx for the current region
         self.sample_idx += 1
 
-        # --- choose random (32x32) spatial crop
+        # choose random (32x32) spatial crop
         H, W = 252, 252
         H_prime = random.randint(0, H - 32 - 1)
         W_prime = random.randint(0, W - 32 - 1)
 
-        # X = X[:, :, H_prime:H_prime+32, W_prime:W_prime+32]
-        # y = y[:, :, H_prime:H_prime+32, W_prime:W_prime+32]
-
-        # HACK: this stupid thing keeps the buffer open enough (~3-4x speed ups)
+        # HACK
+        # * this stupid thing keeps the buffer open enough (~3-4x speed ups)
         self.hrit_buffer[ self.region_idx]['REFL-BT'][   start_T: start_T+500, ...]
         self.opera_buffer[self.region_idx]['rates.crop'][start_T: start_T+500, ...]
 
         # input: 1H satellite data
-        X = hrit_ds[start_T:start_T+4, :, H_prime:H_prime+32, W_prime:W_prime+32].to_numpy()
-        X = torch.Tensor(X)
+        # [T=4, C=11, H=32, W=32]
+        X      = hrit_ds[start_T:start_T+4, :, H_prime:H_prime+32, W_prime:W_prime+32].to_numpy()
+        X      = torch.Tensor(X)
+        X_norm = self.scale_X(X)
 
         # label: 4H proceeding rainfall
-        # [T=16, C=1, H=252, W=252]
+        # [T=16, C=1, H=32, W=32]
         y = opera_ds[start_T+4:start_T+20, :, H_prime:H_prime+32, W_prime:W_prime+32].to_numpy()
         y = torch.Tensor(y)
 
-        # NOTE: clip @0; it can't rain a negative amount; large negative values in our datasets
+        # clip @0; it can't rain a negative amount; large negative values in our datasets
         y = y.clip(0)
+
+        # fill `nan` values with 0.0
         y = y.nan_to_num_()
 
         # wfc challenge #1 target
         # * average hourly cummulative rainfall
         # * individual feature maps (H, W) are 15 minute accumulated rainfall
         # * we derive regression targets: 
-        #   *  hourly rainfall    : H = (maps) * 4
-        #   *  avg hourly rainfall: H/16
-
-        # Cumulative rainfall should be averaged over a 32×32 pixel area of hi-res radar rain rates. 
-        # It should be aggregated over 4h into the future (16 time slots à 15 mins). 
-        # As rain rates are per hour and there are 4 slots à 15 mins per hour, 
-        # that means averaging per hour and summing the 4 hours, 
-        # i.e., averaging the 16 slots and multiplying by 4 (or summing the 16 slots and diving by 4).
+        # * * hourly rainfall    : H = (maps) * 4
+        # * * avg hourly rainfall: H/16
         
         # [T, C=1, H, W] -> [T, H, W]
         y_reg = y.squeeze(1)
@@ -332,14 +359,13 @@ class Sat2RadDataset(Dataset):
         # -> [0, 1]
         y_reg_norm = scale_zero_to_one(y_reg, dataset_min=0, dataset_max=self.y_reg_max)
 
-        # [129]
-        try:
-            y_one_hot_label = self.get_cat_label(y_reg[0].item())
-        except: breakpoint()
-        assert y_one_hot_label.shape[0] == 129
+        # [1] -> [129]; get categorical label for classification/probabilistic task formulation
+        y_one_hot_label = self.get_y_reg_cat_label(y_reg[0].item())
+        assert y_one_hot_label.shape[0] == Sat2RadDataset.NUM_Y_REG_BINS
 
         return {
             "X"         : X,
+            "X_norm"    : X_norm,
             "y"         : y,
             "y_reg"     : y_reg,
             "X_norm"    : X_norm,
@@ -456,27 +482,24 @@ class Sat2RadDataset(Dataset):
 
 
 if __name__ == "__main__":
-    
+
+    """
+    Every computer vision practitioner knows the drill: 
+    subtract [0.485, 0.456, 0.406], 
+    divide by [0.229, 0.224, 0.225]. 
+    """
+
+
     import torch
 
     ds = Sat2RadDataset(split="train")
-    dl = torch.utils.data.DataLoader(ds, batch_size=16, num_workers=16)
+    dl = torch.utils.data.DataLoader(ds, batch_size=2, num_workers=0)
+
+    # [11, 4]; max, min, mean, std
+    stats = None
     
-    labels = None
     for sample in tqdm(dl):
-        y = sample["y_reg_norm"]
-        if labels == None: labels = y.squeeze()
-        else: labels = torch.cat([labels, y.squeeze()])
-    for sample in tqdm(dl):
-        y = sample["y_reg_norm"]
-        if labels == None: labels = y.squeeze()
-        else: labels = torch.cat([labels, y.squeeze()])
-    for sample in tqdm(dl):
-        y = sample["y_reg_norm"]
-        if labels == None: labels = y.squeeze()
-        else: labels = torch.cat([labels, y.squeeze()])
 
-    import matplotlib.pyplot as plt
-    plt.hist(labels, bins=129);
-
-    breakpoint()
+        X = sample['X']
+        if stats is None: stats = X
+        else: stats = torch.cat([stats, X])
