@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from src.util.scale import scale_zero_to_one
 from src.dataloader.dataset_stats import X_MIN, X_MAX, Y_REG_MIN, Y_REG_MAX
+from src.dataloader.dataset_stats import Y_REG_NORM_BINS, Y_REG_NORM_BIN_STEP
 
 
 # quite some annoying UserWarnings thrown by xarray 
@@ -27,26 +28,22 @@ WFC_ROOT_DIR    = "/playpen-ssd/levi/w4c/w4c-25/weather4cast_data"
 WFC_C1_TEST_DIR = "weather4cast_data/challenge_one"
 
 
-Y_MAX     = 603.4000
-Y_REG_MAX = 11.9802827835083
-
-
 class Sat2RadDataset(Dataset):
 
     TOTAL_TRAIN_T      = 163820
     TOTAL_VAL_T        = 15100
     TOTAL_SAMPLE_LEN_T = 20
-    
-    # [0, 4, ..., 512]; for one-hot encoding
-    Y_REG_BINS     = np.arange(0, 512 + 4, 4)
-    NUM_Y_REG_BINS = 129
+
+    SAMPLE_FULL_H = 252
+    SAMPLE_FULL_W = 252
+    SAMPLE_H      = 32
+    SAMPLE_W      = 32
+
+    TEST_STEPS_PER_EPOCH = 120
 
     def __init__(
             self, 
             split="train",
-            X_max:torch.Tensor=X_MAX,
-            y_max:torch.Tensor=Y_MAX,
-            y_reg_max:float=Y_REG_MAX,
         ):
 
         super().__init__()
@@ -60,7 +57,7 @@ class Sat2RadDataset(Dataset):
         elif split == "val":
             self.steps_per_epoch = Sat2RadDataset.TOTAL_VAL_T   // 20
         else:
-            self.steps_per_epoch = 120
+            self.steps_per_epoch = Sat2RadDataset.TEST_STEPS_PER_EPOCH
         
         # modify to keyword for challenge one (cum. precip) data
         if self.split == "test":
@@ -178,24 +175,14 @@ class Sat2RadDataset(Dataset):
             self.steps_per_epoch     = len(test_df)
             self.test_df             = test_df
 
-        # TODO: explore more sophisticated input pre-proc.
-        # - currently, we just scale all ins/outs to ~[0, 1] using training set stats
-        self.X_max      = X_max
-        self.y_max      = y_max
-        self.y_reg_max  = y_reg_max
-
-        # each dataset covers a unique spatial region
-        # we access datasets consecutively (i.e., 0, 1, ... n)
-        # this is much faster when loading data lazily with xarray/dask
-        self.region_idx = 0
-        self.sample_idx = 0 # keep track of which sample we're pointing to in the current region's dataset
-
         # calculate the sum of the temporal dim shapes (T) across all regions
         if self.split in ['train', 'val']:
+            
             total_T = 0
             for hrit_ds, opera_ds in zip(self.hrit_buffer, self.opera_buffer):
                 T = min(hrit_ds['REFL-BT'].shape[0], opera_ds['rates.crop'].shape[0])
                 total_T += T
+            
             # print(f"Warning: changing steps-per-epoch from {self.steps_per_epoch} -> {total_T // 20}")
             self.total_T = total_T
 
@@ -205,14 +192,14 @@ class Sat2RadDataset(Dataset):
     @staticmethod
     def X_pre_proc(X: torch.Tensor) -> torch.Tensor:
         # [ds.min, ds.max] -> [0, 1]
-        X = (X - X_MIN) / (X_MAX - X_MIN)
+        X = (X - X_MIN.view(1, -1, 1, 1)) / (X_MAX.view(1, -1, 1, 1) - X_MIN.view(1, -1, 1, 1))
         return X
 
     @staticmethod
-    def X_post_proc(X: torch.Tensor) -> torch.Tensor:
+    def X_post_proc(X_norm: torch.Tensor) -> torch.Tensor:
         # [0, 1] -> [ds.min, ds.max]
         S = (X_MAX - X_MIN)
-        X = (S * X) - X_MIN
+        X = (S * X_norm) - X_MIN
         return X
 
     @staticmethod
@@ -222,14 +209,14 @@ class Sat2RadDataset(Dataset):
         return y_reg
 
     @staticmethod
-    def y_reg_post_proc(y_reg: torch.Tensor) -> torch.Tensor:
+    def y_reg_post_proc(y_reg_norm: torch.Tensor) -> torch.Tensor:
         # [0, 1] -> [ds.min, ds.max]
-        S     = (Y_REG_MAX  - Y_REG_MIN)
-        y_reg = (S * y_reg) - Y_REG_MIN
+        S     = (Y_REG_MAX       - Y_REG_MIN)
+        y_reg = (S * y_reg_norm) - Y_REG_MIN
         return y_reg
      
     @staticmethod
-    def get_y_reg_cat_label(y_reg: float) -> torch.Tensor:
+    def get_y_reg_norm_cat_label(y_reg_norm: float) -> torch.Tensor:
         """
         args
         ---
@@ -240,18 +227,14 @@ class Sat2RadDataset(Dataset):
         :torch.Tensor: one hot categorcial label
         """
 
-        # if y < 0: y = 0
-        y_reg = max(y_reg, 0)
+        assert y_reg_norm >= 0.0
 
-        # if y > 512: y = 512
-        y_reg = min(y_reg, 512)
-
-        # round y to the nearest whole multiple of 4
-        y_reg = int(round(y_reg / 4) * 4)
-        i = y_reg  // 4
-        
-        one_hot_label    = torch.zeros(Sat2RadDataset.Y_REG_BINS.shape)
+        # round y to the nearest multiple of bin step
+        i                = int(round(y_reg_norm / Y_REG_NORM_BIN_STEP))
+        one_hot_label    = torch.zeros(Y_REG_NORM_BINS.shape)
         one_hot_label[i] = 1
+
+        breakpoint()
 
         return one_hot_label
 
@@ -285,14 +268,8 @@ class Sat2RadDataset(Dataset):
 
         region_idx = random.randint(0, len(self.hrit_buffer) - 1)
 
-        # * old *
-        # hrit_ds  = self.hrit_buffer[self.region_idx]['REFL-BT']
-
         # [T1, 11, 252, 252]        
         hrit_ds  = self.hrit_buffer[region_idx]['REFL-BT']
-        
-        # * old *
-        # opera_ds = self.opera_buffer[self.region_idx]['rates.crop']
 
         # [T2, 1, 252, 252]
         opera_ds = self.opera_buffer[region_idx]['rates.crop']
@@ -300,37 +277,33 @@ class Sat2RadDataset(Dataset):
         
         # calculate starting temporal index of this sample
         
-        # * old *
-        # start_T = (Sat2RadDataset.TOTAL_SAMPLE_LEN_T * self.sample_idx)
-        
         T       = min(hrit_ds.shape[0], opera_ds.shape[0])
         start_T = random.randint(0, T - Sat2RadDataset.TOTAL_SAMPLE_LEN_T - 1)
 
+        
         # choose random (32x32) spatial crop
-        H, W = 252, 252
-        H_prime = random.randint(0, H - 32 - 1)
-        W_prime = random.randint(0, W - 32 - 1)
+        H, W = Sat2RadDataset.SAMPLE_FULL_H, Sat2RadDataset.SAMPLE_FULL_W
+        H_prime = random.randint(0, H - Sat2RadDataset.SAMPLE_H - 1)
+        W_prime = random.randint(0, W - Sat2RadDataset.SAMPLE_W - 1)
 
-        # HACK
-        # * this stupid thing keeps the buffer open enough (~3-4x speed ups)
-        self.hrit_buffer[ self.region_idx]['REFL-BT'][   start_T: start_T+500, ...]
-        self.opera_buffer[self.region_idx]['rates.crop'][start_T: start_T+500, ...]
 
         # input: 1H satellite data
         # [T=4, C=11, H=32, W=32]
         X      = hrit_ds[start_T:start_T+4, :, H_prime:H_prime+32, W_prime:W_prime+32].to_numpy()
         X      = torch.Tensor(X)
 
-        # label: 4H proceeding rainfall
+
+        # soft label: 4H proceeding rainfall
         # [T=16, C=1, H=32, W=32]
         y = opera_ds[start_T+4:start_T+20, :, H_prime:H_prime+32, W_prime:W_prime+32].to_numpy()
         y = torch.Tensor(y)
-
+        
         # clip @0; it can't rain a negative amount; large negative values in our datasets
         y = y.clip(0)
 
         # fill `nan` values with 0.0
         y = y.nan_to_num_()
+
 
         # wfc challenge #1 target
         # * average hourly cummulative rainfall
@@ -346,24 +319,24 @@ class Sat2RadDataset(Dataset):
         y_reg = y_reg / 4              #  "diving by 4"
         y_reg = y_reg.unsqueeze(0)     # -> [1]
 
+
         # TODO: implement
         # [ds.min, ds.max] -> [0, 1]
         X_norm     = self.X_pre_proc(X)
         y_reg_norm = self.y_reg_pre_proc(y_reg)
 
+
         # [1] -> [129]; get categorical label for classification/probabilistic task formulation
-        y_one_hot_label = self.get_y_reg_cat_label(y_reg[0].item())
-        assert y_one_hot_label.shape[0] == Sat2RadDataset.NUM_Y_REG_BINS
+        y_one_hot_label = Sat2RadDataset.get_y_reg_norm_cat_label(y_reg_norm[0].item())
+
 
         return {
             "X"         : X,
-            # "X_norm"    : X_norm,
+            "X_norm"    : X_norm,
             "y"         : y,
             "y_reg"     : y_reg,
-            # "X_norm"    : X_norm,
-            # "y_norm"    : y_norm,
-            # "y_reg_norm": y_reg_norm,
-            # "y_reg_oh"  : y_one_hot_label
+            "y_reg_norm": y_reg_norm,
+            "y_reg_oh"  : y_one_hot_label
         }
     
     def get_item_test(self, index: int) -> dict:
@@ -474,26 +447,24 @@ class Sat2RadDataset(Dataset):
 
 
 if __name__ == "__main__":
-    
-
     """
     Every computer vision practitioner knows the drill: 
     subtract [0.485, 0.456, 0.406], 
     divide by [0.229, 0.224, 0.225]. 
     """
 
-
     import torch
 
     ds = Sat2RadDataset(split="train")
-    dl = torch.utils.data.DataLoader(ds, batch_size=16, num_workers=16)
+    dl = torch.utils.data.DataLoader(ds, batch_size=1, num_workers=0)
 
     # [11, 4]; max, min, mean, std
-    y_reg_max = 0
-    
+    y_reg_max   = 0
+    y_reg_norms = None
+
     for sample in tqdm(dl):
 
-        y_reg     = sample['y_reg']
-        y_reg_max = max(y_reg.max(), y_reg_max)
-
-    breakpoint()
+        if y_reg_norms is None: 
+            y_reg_norms = torch.Tensor(sample["y_reg_norm"])
+        else:
+            y_reg_norms = torch.cat([y_reg_norms, sample["y_reg_norm"]])
