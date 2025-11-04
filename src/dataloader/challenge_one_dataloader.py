@@ -15,7 +15,7 @@ from torch.utils.data import Dataset
 from concurrent.futures import ThreadPoolExecutor
 
 from src.util.scale import scale_zero_to_one
-from src.dataloader.dataset_stats import X_MIN, X_MAX, X_MEAN, X_STD
+from src.dataloader.dataset_stats import X_MIN, X_MAX, Y_REG_MIN, Y_REG_MAX
 
 
 # quite some annoying UserWarnings thrown by xarray 
@@ -27,16 +27,15 @@ WFC_ROOT_DIR    = "/playpen-ssd/levi/w4c/w4c-25/weather4cast_data"
 WFC_C1_TEST_DIR = "weather4cast_data/challenge_one"
 
 
-# HACK: hard code normalization stats from training set
-# X_MAX     = 336.2159
 Y_MAX     = 603.4000
 Y_REG_MAX = 11.9802827835083
 
 
 class Sat2RadDataset(Dataset):
 
-    TOTAL_TRAIN_T  = 163820
-    TOTAL_VAL_T    = 15100
+    TOTAL_TRAIN_T      = 163820
+    TOTAL_VAL_T        = 15100
+    TOTAL_SAMPLE_LEN_T = 20
     
     # [0, 4, ..., 512]; for one-hot encoding
     Y_REG_BINS     = np.arange(0, 512 + 4, 4)
@@ -45,9 +44,9 @@ class Sat2RadDataset(Dataset):
     def __init__(
             self, 
             split="train",
-            X_max=X_MAX,
-            y_max=Y_MAX,
-            y_reg_max=Y_REG_MAX,
+            X_max:torch.Tensor=X_MAX,
+            y_max:torch.Tensor=Y_MAX,
+            y_reg_max:float=Y_REG_MAX,
         ):
 
         super().__init__()
@@ -202,26 +201,35 @@ class Sat2RadDataset(Dataset):
 
     def __len__(self) -> int:
         return self.steps_per_epoch
-
-    def scale_X(self, X):
-        
-        for C in range(X.shape[1]):
-            
-            # -> [0, 1]
-            X[:, C, ...] = (X[:, C, ...] - X_MIN[C]) / (X_MAX[C] - X_MIN[C])
-            X[:, C, ...] = (X[:, C, ...] - X_MEAN[C]) / X_STD[C]
-                    
-        return X
     
-    def X_pre_proc(self, X: torch.Tensor) -> torch.Tensor: pass
+    @staticmethod
+    def X_pre_proc(X: torch.Tensor) -> torch.Tensor:
+        # [ds.min, ds.max] -> [0, 1]
+        X = (X - X_MIN) / (X_MAX - X_MIN)
+        return X
 
-    def X_post_proc(self, X: torch.Tensor) -> torch.Tensor: pass
+    @staticmethod
+    def X_post_proc(X: torch.Tensor) -> torch.Tensor:
+        # [0, 1] -> [ds.min, ds.max]
+        S = (X_MAX - X_MIN)
+        X = (S * X) - X_MIN
+        return X
 
-    def y_reg_pre_proc(self, X: torch.Tensor) -> torch.Tensor: pass
+    @staticmethod
+    def y_reg_pre_proc(y_reg: torch.Tensor) -> torch.Tensor:
+        # [ds.min, ds.max] -> [0, 1]
+        y_reg = (y_reg - Y_REG_MIN) / (Y_REG_MAX - Y_REG_MIN)
+        return y_reg
 
-    def y_reg_post_proc(self, X: torch.Tensor) -> torch.Tensor: pass
+    @staticmethod
+    def y_reg_post_proc(y_reg: torch.Tensor) -> torch.Tensor:
+        # [0, 1] -> [ds.min, ds.max]
+        S     = (Y_REG_MAX  - Y_REG_MIN)
+        y_reg = (S * y_reg) - Y_REG_MIN
+        return y_reg
      
-    def get_y_reg_cat_label(self, y_reg: float) -> torch.Tensor:
+    @staticmethod
+    def get_y_reg_cat_label(y_reg: float) -> torch.Tensor:
         """
         args
         ---
@@ -266,51 +274,37 @@ class Sat2RadDataset(Dataset):
         output 
         ---
         - :y:
-        -  OPERA average, hourly cummulative precipitation for 4H; 32x32 pixels
+        - OPERA "average, hourly cummulative precipitation" for 4H over (32x32) pixels
         - (B, H, W, C, T) -> (B, 32, 32, 1, 16)
         """
-
-        # [T1, 11, 252, 252]
-        hrit_ds  = self.hrit_buffer[self.region_idx]['REFL-BT']
-        
-        # [T2, 1, 252, 252]
-        opera_ds = self.opera_buffer[self.region_idx]['rates.crop']
 
         # TODO
         # * contact organizers
         # * T1, T2 are DIFFERENT for trainset; (T2 < T1)
         # * verify that index starts at 0 for both datasets
+
+        region_idx = random.randint(0, len(self.hrit_buffer) - 1)
+
+        # * old *
+        # hrit_ds  = self.hrit_buffer[self.region_idx]['REFL-BT']
+
+        # [T1, 11, 252, 252]        
+        hrit_ds  = self.hrit_buffer[region_idx]['REFL-BT']
+        
+        # * old *
+        # opera_ds = self.opera_buffer[self.region_idx]['rates.crop']
+
+        # [T2, 1, 252, 252]
+        opera_ds = self.opera_buffer[region_idx]['rates.crop']
+        
         
         # calculate starting temporal index of this sample
-        start_T = (20 * self.sample_idx)
+        
+        # * old *
+        # start_T = (Sat2RadDataset.TOTAL_SAMPLE_LEN_T * self.sample_idx)
+        
         T       = min(hrit_ds.shape[0], opera_ds.shape[0])
-        
-        # NOTE
-        # * divide total T sequence into T // 20 non-overlapping windows
-        # * much faster to access neighboring T when lazy loading from xarray.Dataset objs
-        if start_T >= T - 20:
-                
-            # reset the current sample idx for a new region
-            self.sample_idx = 0
-            
-            # ++ next region
-            self.region_idx += 1
-
-            # reset if we've passed through all regions
-            if self.region_idx >= len(self.opera_buffer):
-                self.region_idx = 0
-
-            # [T1, 11, 252, 252]
-            hrit_ds  = self.hrit_buffer[self.region_idx]['REFL-BT']
-            
-            # [T2, 1, 252, 252]; T2<=T1 typically
-            opera_ds = self.opera_buffer[self.region_idx]['rates.crop']
-
-            start_T = 0
-            T       = min(hrit_ds.shape[0], opera_ds.shape[0])
-        
-        # ++ sample idx for the current region
-        self.sample_idx += 1
+        start_T = random.randint(0, T - Sat2RadDataset.TOTAL_SAMPLE_LEN_T - 1)
 
         # choose random (32x32) spatial crop
         H, W = 252, 252
@@ -326,7 +320,6 @@ class Sat2RadDataset(Dataset):
         # [T=4, C=11, H=32, W=32]
         X      = hrit_ds[start_T:start_T+4, :, H_prime:H_prime+32, W_prime:W_prime+32].to_numpy()
         X      = torch.Tensor(X)
-        X_norm = self.scale_X(X)
 
         # label: 4H proceeding rainfall
         # [T=16, C=1, H=32, W=32]
@@ -353,11 +346,10 @@ class Sat2RadDataset(Dataset):
         y_reg = y_reg / 4              #  "diving by 4"
         y_reg = y_reg.unsqueeze(0)     # -> [1]
 
-        X_norm     = scale_zero_to_one(X,     dataset_min=0, dataset_max=self.X_max)
-        y_norm     = scale_zero_to_one(y,     dataset_min=0, dataset_max=self.y_max)
-
-        # -> [0, 1]
-        y_reg_norm = scale_zero_to_one(y_reg, dataset_min=0, dataset_max=self.y_reg_max)
+        # TODO: implement
+        # [ds.min, ds.max] -> [0, 1]
+        X_norm     = self.X_pre_proc(X)
+        y_reg_norm = self.y_reg_pre_proc(y_reg)
 
         # [1] -> [129]; get categorical label for classification/probabilistic task formulation
         y_one_hot_label = self.get_y_reg_cat_label(y_reg[0].item())
@@ -365,13 +357,13 @@ class Sat2RadDataset(Dataset):
 
         return {
             "X"         : X,
-            "X_norm"    : X_norm,
+            # "X_norm"    : X_norm,
             "y"         : y,
             "y_reg"     : y_reg,
-            "X_norm"    : X_norm,
-            "y_norm"    : y_norm,
-            "y_reg_norm": y_reg_norm,
-            "y_reg_oh"  : y_one_hot_label
+            # "X_norm"    : X_norm,
+            # "y_norm"    : y_norm,
+            # "y_reg_norm": y_reg_norm,
+            # "y_reg_oh"  : y_one_hot_label
         }
     
     def get_item_test(self, index: int) -> dict:
@@ -482,6 +474,7 @@ class Sat2RadDataset(Dataset):
 
 
 if __name__ == "__main__":
+    
 
     """
     Every computer vision practitioner knows the drill: 
@@ -493,13 +486,14 @@ if __name__ == "__main__":
     import torch
 
     ds = Sat2RadDataset(split="train")
-    dl = torch.utils.data.DataLoader(ds, batch_size=2, num_workers=0)
+    dl = torch.utils.data.DataLoader(ds, batch_size=16, num_workers=16)
 
     # [11, 4]; max, min, mean, std
-    stats = None
+    y_reg_max = 0
     
     for sample in tqdm(dl):
 
-        X = sample['X']
-        if stats is None: stats = X
-        else: stats = torch.cat([stats, X])
+        y_reg     = sample['y_reg']
+        y_reg_max = max(y_reg.max(), y_reg_max)
+
+    breakpoint()
