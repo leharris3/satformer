@@ -11,7 +11,7 @@
       "image_size": 32,
       "patch_size": 4,
       "num_frames": 4,
-      "num_classes": 129,
+      "num_classes": 128,
       "depth": 12,
       "heads": 8,
       "dim_head": 64,
@@ -42,9 +42,9 @@
   "dataloader": {
     "train": {
       "kwargs": {
-        "batch_size": 16,
+        "batch_size": 2,
         "shuffle": false,
-        "num_workers": 16
+        "num_workers": 0
       }
     },
     "val": {
@@ -67,7 +67,7 @@
   },
   "logging": {
     "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
-    "exp_name": "timesformer-reg-test",
+    "exp_name": "timesformer-categorical-test",
     "log_interval": 100,
     "wandb": {
       "log": false,

@@ -18,6 +18,7 @@ from torch.utils.data import DataLoader
 
 from src.util.logger import ExperimentLogger
 from src.util.plot.opera import plot_opera_16hr
+from src.util.eval_metrics import mean_csi, mean_f1, mean_crps
 from src.util.scale import scale_zero_to_one, undo_scale_zero_to_one
 
 
@@ -116,7 +117,7 @@ def train(
     val_loss.cuda(device)
     # model.float()
 
-    y_label_str      = "y_reg_norm"
+    y_label_str      = "y_reg_norm_oh"
 
     # ---------- training loop ----------
     for epoch in range(num_epochs):
@@ -133,8 +134,12 @@ def train(
             # zero gradients
             optimizer.zero_grad()
 
-            # forward; [B, C=1, H, W]
+            # forward; -> [B, N_CLS]
             y_hat:torch.Tensor = model(X)
+
+            mean_csi(y_hat, y)
+            mean_f1(y_hat, y)
+            mean_crps(y_hat, y)
 
             loss = train_loss(y_hat, y)
             
@@ -143,19 +148,19 @@ def train(
             optimizer.step()
 
             # calculate loss using original dataset scale; [mm/hr]
-            rescaled_loss = train_loss(undo_scale_zero_to_one(y_hat, 0, train_dataset.y_reg_max), batch["y_reg"].cuda(device))
+            # rescaled_loss = train_loss(undo_scale_zero_to_one(y_hat, 0, train_dataset.y_reg_max), batch["y_reg"].cuda(device))
 
             if config['logging']["wandb"]["log"] == True:
                 
                 wandb.log(
                     {
-                        "epoch": epoch,
-                        "train_loss": loss.item(),
-                        "train_loss_rescaled": rescaled_loss.item(),
+                        "epoch"              : epoch,
+                        "train_cce_loss"     : loss.item(),
                     }
                 )
 
                 save_fig_step = float(config['logging']['wandb']['save_figure_step'])
+                
                 if step % save_fig_step == 0:
                     # log a 16-image mosaic
                     # TODO: one day... add support for flexible callbacks
@@ -180,7 +185,8 @@ def train(
                 # predict
                 y_hat         = model(X)
                 loss          = val_loss(y_hat, y)
-                rescaled_loss = val_loss(undo_scale_zero_to_one(y_hat, 0, train_dataset.y_reg_max), batch["y_reg"].cuda(device))
+                
+                # rescaled_loss = val_loss(undo_scale_zero_to_one(y_hat, 0, train_dataset.y_reg_max), batch["y_reg"].cuda(device))
                 # note, we still want to use trainset set stats to rescale ^^
                 
                 if config['logging']["wandb"]["log"] == True:
@@ -188,9 +194,8 @@ def train(
                     # log some data every step
                     wandb.log(
                         {
-                            "epoch": epoch,
-                            "val_loss": loss.item(),
-                            "val_loss_rescaled": rescaled_loss.item(),
+                            "epoch"       : epoch,
+                            "val_cce_loss": loss.item(),
                         }
                     )
 

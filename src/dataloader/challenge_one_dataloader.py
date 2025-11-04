@@ -234,7 +234,8 @@ class Sat2RadDataset(Dataset):
         one_hot_label    = torch.zeros(Y_REG_NORM_BINS.shape)
         one_hot_label[i] = 1
 
-        return one_hot_label
+        # [N_CLASSES]
+        return one_hot_label.squeeze()
 
     def get_item_train_val(self, index: int) -> dict:
         """
@@ -328,12 +329,12 @@ class Sat2RadDataset(Dataset):
 
 
         return {
-            "X"         : X,
-            "X_norm"    : X_norm,
-            "y"         : y,
-            "y_reg"     : y_reg,
-            "y_reg_norm": y_reg_norm,
-            "y_reg_oh"  : y_one_hot_label
+            "X"             : X,
+            "X_norm"        : X_norm,
+            "y"             : y,
+            "y_reg"         : y_reg,
+            "y_reg_norm"    : y_reg_norm,
+            "y_reg_norm_oh" : y_one_hot_label
         }
     
     def get_item_test(self, index: int) -> dict:
@@ -457,6 +458,8 @@ if __name__ == "__main__":
     y_reg_norms = None
 
     for sample in tqdm(dl):
+
+        breakpoint()
 
         if y_reg_norms is None: 
             y_reg_norms = torch.Tensor(sample["y_reg_norm"])
