@@ -1,7 +1,7 @@
 {
   "global": {
     "num_epochs": 200,
-    "device": 0
+    "device": 1
   },
   "model": {
     "target": "src.model.timesformer.timesformer_pytorch.TimeSformer",
@@ -57,17 +57,17 @@
   },
   "loss": {
     "train": {
-      "target": "src.util.loss.CategoricalCrossEntropy",
+      "target": "src.util.loss.ClassWeightedCategoricalCrossEntropy",
       "kwargs": {}
     },
     "val": {
-      "target": "src.util.loss.CategoricalCrossEntropy",
+      "target": "src.util.loss.ClassWeightedCategoricalCrossEntropy",
       "kwargs": {}
     }
   },
   "logging": {
     "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
-    "exp_name": "timesformer-categorical-loss=CCE-lr=1e-5-BS=128",
+    "exp_name": "timesformer-categorical-loss=class-weightedCCE-lr=1e-5-BS=128",
     "log_interval": 100,
     "wandb": {
       "log": true,

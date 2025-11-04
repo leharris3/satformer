@@ -69,6 +69,7 @@ class MagWeightedL1(nn.Module):
         
         # simply weight by the approx max of the target 
         return F.l1_loss(preds, target) * (self.alpha * torch.logsumexp(target, (0, 1)))
+    
 
 class CategoricalCrossEntropy(nn.Module):
 
@@ -81,10 +82,25 @@ class CategoricalCrossEntropy(nn.Module):
         return F.binary_cross_entropy(pred, target)
     
 
+class ClassWeightedCategoricalCrossEntropy(nn.Module):
+
+    def __init__(self, *args, **kwargs):
+        
+        super().__init__(*args, **kwargs)
+        
+        freqs        = torch.tensor(Y_REG_FREQ_BINS)[:-2]
+        freqs       += (1 / len(freqs)) # no zero weights
+        self.weights = 1 / freqs
+
+    def forward(self, logits:torch.Tensor, target:torch.Tensor):
+
+        self.weights = self.weights.to(target.device)
+        pred = F.softmax(logits, dim=1)
+        return F.binary_cross_entropy(pred, target, weight=self.weights)
 
 if __name__ == "__main__":
 
-    loss = FreqWeightedL1()
-    y = torch.linspace(0, 1, 10).unsqueeze(1)
-    y_hat = torch.rand(10, 1)
+    loss = ClassWeightedCategoricalCrossEntropy()
+    y     = torch.rand(2, 128)
+    y_hat = torch.rand(2, 128)
     loss(y_hat, y)
