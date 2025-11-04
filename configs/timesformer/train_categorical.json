@@ -1,6 +1,6 @@
 {
   "global": {
-    "num_epochs": 1,
+    "num_epochs": 200,
     "device": 0
   },
   "model": {
@@ -42,9 +42,9 @@
   "dataloader": {
     "train": {
       "kwargs": {
-        "batch_size": 2,
+        "batch_size": 128,
         "shuffle": false,
-        "num_workers": 0
+        "num_workers": 16
       }
     },
     "val": {
@@ -67,10 +67,10 @@
   },
   "logging": {
     "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
-    "exp_name": "timesformer-categorical-test",
+    "exp_name": "timesformer-categorical-loss=CCE-lr=1e-5-BS=128",
     "log_interval": 100,
     "wandb": {
-      "log": false,
+      "log": true,
       "api_key": "3d8c09b359c1abc995fd03c27398c41afce857c1",
       "save_figure_step": 100
     }

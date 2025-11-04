@@ -137,10 +137,6 @@ def train(
             # forward; -> [B, N_CLS]
             y_hat:torch.Tensor = model(X)
 
-            mean_csi(y_hat, y)
-            mean_f1(y_hat, y)
-            mean_crps(y_hat, y)
-
             loss = train_loss(y_hat, y)
             
             # backprop and step
@@ -154,8 +150,11 @@ def train(
                 
                 wandb.log(
                     {
-                        "epoch"              : epoch,
-                        "train_cce_loss"     : loss.item(),
+                        "epoch"          : epoch,
+                        "train_cce_loss" : loss.item(),
+                        "train_mCSI"     : mean_csi(y_hat, y),
+                        "train_mF1"      : mean_f1(y_hat, y),
+                        "train_mCRPS"    : mean_crps(y_hat, y),
                     }
                 )
 
@@ -196,7 +195,10 @@ def train(
                         {
                             "epoch"       : epoch,
                             "val_cce_loss": loss.item(),
-                        }
+                            "val_mCSI"    : mean_csi(y_hat, y),
+                            "val_mF1"     : mean_f1(y_hat, y),
+                            "val_mCRPS"   : mean_crps(y_hat, y),
+                            }
                     )
 
                     save_fig_step = float(config['logging']['wandb']['save_figure_step'])
