@@ -234,8 +234,6 @@ class Sat2RadDataset(Dataset):
         one_hot_label    = torch.zeros(Y_REG_NORM_BINS.shape)
         one_hot_label[i] = 1
 
-        breakpoint()
-
         return one_hot_label
 
     def get_item_train_val(self, index: int) -> dict:
@@ -320,7 +318,6 @@ class Sat2RadDataset(Dataset):
         y_reg = y_reg.unsqueeze(0)     # -> [1]
 
 
-        # TODO: implement
         # [ds.min, ds.max] -> [0, 1]
         X_norm     = self.X_pre_proc(X)
         y_reg_norm = self.y_reg_pre_proc(y_reg)
@@ -416,13 +413,10 @@ class Sat2RadDataset(Dataset):
         assert x_br_scaled - x_tl_scaled == 32
         assert y_br_scaled - y_tl_scaled == 32
 
-        # input (X)
-        # 1H HRIT satallite context (can be larger); centered about corresponding area of precipitation
-        # - (B, H, W, C, T) -> (B, (32 // 6) + (32 // 6) + 1, 11, 4) -> (B, 6+, 6+, 11, 4)
+        
+        # [ds.min, ds.max] -> [0, 1]
+        X_norm     = self.X_pre_proc(X)
 
-        # -> [C=11, T=4, H=32, W=32]
-        X      = X[:, :, x_tl_scaled:x_br_scaled, y_tl_scaled:y_br_scaled]
-        X_norm = scale_zero_to_one(X, dataset_min=0, dataset_max=self.X_max)
 
         return {
             "X"             : X,
