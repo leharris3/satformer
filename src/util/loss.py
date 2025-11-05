@@ -89,7 +89,7 @@ class ClassWeightedCategoricalCrossEntropy(nn.Module):
         
         super().__init__(*args, **kwargs)
         
-        freqs        = torch.tensor(Y_REG_FREQ_BINS)[:-2]
+        freqs        = torch.tensor(Y_REG_FREQ_BINS)
         freqs       += (1 / len(freqs)) # no zero weights
 
         # log weights
