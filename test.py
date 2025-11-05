@@ -9,6 +9,7 @@ import yaml
 import json
 import subprocess
 import pandas as pd
+import torch.nn.functional as F
 
 import torch
 import torch.nn as nn
@@ -21,6 +22,8 @@ from torch.utils.data import DataLoader
 from src.util.logger import ExperimentLogger
 from src.util.plot.opera import plot_opera_16hr
 from src.util.scale import scale_zero_to_one, undo_scale_zero_to_one
+from src.dataloader.challenge_one_dataloader import Sat2RadDataset
+from src.dataloader.dataset_stats import Y_REG_NORM_BINS, Y_REG_MAX
 
 warnings.simplefilter("always")
 torch.multiprocessing.set_sharing_strategy("file_system")
@@ -111,7 +114,7 @@ def test(
     device = int(config['global']['device'])
     
     # HACK:
-    model_fp = "/playpen-ssd/levi/w4c/w4c-25/__exps__/2025-11-02_20-49-53_timesformer-reg-kde-weighted-l1-bs=86/best.pth"
+    model_fp = config['model']['weights']
     model    = torch.load(model_fp, weights_only=False)
 
     model.cuda(device)
@@ -123,25 +126,30 @@ def test(
         tqdm(dataloader, total=len(dataset))
     ):
 
-        X: torch.Tensor = batch["X_norm"].cuda(device)
-
-        # forward; [B, C=1, H, W]
-        try:
-            y_hat:torch.Tensor = model(X)
-        except: breakpoint()
+        X    : torch.Tensor = batch["X_norm"].cuda(device)
         
-        y_hat_scaled       = undo_scale_zero_to_one(y_hat, 0, dataset.y_reg_max)
+        # [B, 128]
+        y_hat:torch.Tensor  = model(X)
+        logits              = F.softmax(y_hat, dim=1)
+        cum_prob            = logits.cumsum(dim=1)
+        rescaled_bins       = (Y_REG_NORM_BINS.cuda(device) * Y_REG_MAX).repeat(cum_prob.shape[0], 1)
 
-        # HACK
-        if not (y_hat_scaled > 0):
-            y_hat_scaled = torch.Tensor([0])
+        # # HACK
+        # if not (y_hat_scaled > 0):
+        #     y_hat_scaled = torch.Tensor([0])
 
         csv_fp = submission_dir / Path(f"{batch["year"].item()}") / Path(f"{batch['file_name'][0].split(".")[0]}.test.cum4h.csv")
         if csv_fp not in preds: preds[csv_fp] = []
 
         # HACK:
         # [Case-ID, amount (mm/hr), cum_prob]
-        preds[csv_fp].append([batch['Case-id'][0], y_hat_scaled.item(), 1])
+        for B in range(cum_prob.shape[0]):
+            rb, cp = rescaled_bins[B, ...], cum_prob[B, ...]
+            for _bin, _prob in zip(rb, cp):
+                
+                # HACK: examples show int bins
+                _bin = int(_bin.item())
+                preds[csv_fp].append([batch['Case-id'][0], _bin, _prob.item()])
 
     # save all predictions as csvs
     for k, v in preds.items():

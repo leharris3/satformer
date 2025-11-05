@@ -231,6 +231,11 @@ class Sat2RadDataset(Dataset):
 
         # round y to the nearest multiple of bin step
         i                = int(round(y_reg_norm / Y_REG_NORM_BIN_STEP))
+        
+        # HACK: occasionally we're getting enormous values (e.g., 2000+)
+        # TODO: investigate
+        i = min(i, len(Y_REG_NORM_BINS.shape) - 1)
+
         one_hot_label    = torch.zeros(Y_REG_NORM_BINS.shape)
         one_hot_label[i] = 1
 
@@ -451,17 +456,19 @@ if __name__ == "__main__":
     import torch
 
     ds = Sat2RadDataset(split="train")
-    dl = torch.utils.data.DataLoader(ds, batch_size=1, num_workers=0)
+    dl = torch.utils.data.DataLoader(ds, batch_size=16, num_workers=16)
 
     # [11, 4]; max, min, mean, std
     y_reg_max   = 0
     y_reg_norms = None
 
-    for sample in tqdm(dl):
+    for _ in range(50):
 
-        breakpoint()
+        for sample in tqdm(dl):
 
-        if y_reg_norms is None: 
-            y_reg_norms = torch.Tensor(sample["y_reg_norm"])
-        else:
-            y_reg_norms = torch.cat([y_reg_norms, sample["y_reg_norm"]])
+            if y_reg_norms is None: 
+                y_reg_norms = torch.Tensor(sample["y_reg_norm"])
+            else:
+                y_reg_norms = torch.cat([y_reg_norms, sample["y_reg_norm"]])
+
+    breakpoint()

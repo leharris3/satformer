@@ -1,0 +1,53 @@
+{
+  "global": {
+    "device": 3
+  },
+  "model": {
+    "target": "src.model.timesformer.timesformer_pytorch.TimeSformer",
+    "kwargs": {
+      "dim": 512,
+      "channels": 11,
+      "image_size": 32,
+      "patch_size": 4,
+      "num_frames": 4,
+      "num_classes": 128,
+      "depth": 12,
+      "heads": 8,
+      "dim_head": 64,
+      "attn_dropout": 0.1,
+      "ff_dropout": 0.1
+    },
+    "weights": "/playpen-ssd/levi/w4c/w4c-25/__exps__/2025-11-04_11-29-32_timesformer-categorical-loss=CCE-lr=1e-5-BS=128/best.pth"
+  },
+  "dataset": {
+    "test": {
+      "target": "src.dataloader.challenge_one_dataloader.Sat2RadDataset",
+      "kwargs": {"split": "test"}
+    }
+  },
+  "dataloader": {
+    "test": {
+      "kwargs": {
+        "batch_size": 1,
+        "shuffle": false,
+        "num_workers": 1
+      }
+    }
+  },
+  "loss": {
+    "test": {
+      "target": "src.util.loss.L1",
+      "kwargs": {}
+    }
+  },
+  "logging": {
+    "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
+    "exp_name": "timesformer-KDE-L1-submission-N=1-BS=86",
+    "log_interval": 100,
+    "wandb": {
+      "log": false,
+      "api_key": "3d8c09b359c1abc995fd03c27398c41afce857c1",
+      "save_figure_step": 100
+    }
+  }
+}
