@@ -17,7 +17,8 @@
       "dim_head": 64,
       "attn_dropout": 0.1,
       "ff_dropout": 0.1
-    }
+    },
+    "weights":"/playpen-ssd/levi/w4c/w4c-25/__exps__/2025-11-04_12-15-32_timesformer-categorical-loss=class-weightedCCE-lr=1e-5-BS=128/best.pth"
   },
   "optimizer": {
     "target": "torch.optim.Adam",
@@ -70,7 +71,7 @@
     "exp_name": "timesformer-categorical-loss=class-weightedCCE-lr=1e-5-BS=128",
     "log_interval": 100,
     "wandb": {
-      "log": true,
+      "log": false,
       "api_key": "3d8c09b359c1abc995fd03c27398c41afce857c1",
       "save_figure_step": 100
     }

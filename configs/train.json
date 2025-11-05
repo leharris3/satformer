@@ -5,7 +5,7 @@
   },
   "model": {
     "target": "src.model.smaat.SmaAt_UNet.SmaAt_UNet",
-    "kwargs": {"n_channels": 11, "n_classes": 1}
+    "kwargs": {"n_channels": 11, "n_classes": 1},
   },
   "optimizer": {
     "target": "torch.optim.Adam",

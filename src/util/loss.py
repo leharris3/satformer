@@ -5,7 +5,8 @@ import numpy as np
 
 from typing import Optional, Sequence, List
 from scipy.interpolate import PchipInterpolator
-from src.util.kde_helpers import Y_REG_MAG_BINS, Y_REG_FREQ_BINS, weighted_gaussian_kde
+from src.util.kde_helpers import Y_REG_MAG_BINS, weighted_gaussian_kde
+from src.dataloader.dataset_stats import Y_REG_FREQ_BINS
 
 
 class MSE(nn.Module):
@@ -90,13 +91,20 @@ class ClassWeightedCategoricalCrossEntropy(nn.Module):
         
         freqs        = torch.tensor(Y_REG_FREQ_BINS)[:-2]
         freqs       += (1 / len(freqs)) # no zero weights
-        self.weights = 1 / freqs
+
+        # log weights
+        log_rel_freqs = (torch.log(1 / freqs))
+        
+        # -> [0, 1]
+        self.weights  = (log_rel_freqs - log_rel_freqs.min()) / (log_rel_freqs.max() - log_rel_freqs.min())
+
 
     def forward(self, logits:torch.Tensor, target:torch.Tensor):
 
         self.weights = self.weights.to(target.device)
         pred = F.softmax(logits, dim=1)
         return F.binary_cross_entropy(pred, target, weight=self.weights)
+
 
 if __name__ == "__main__":
 
