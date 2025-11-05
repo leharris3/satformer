@@ -310,8 +310,8 @@ class Sat2RadDataset(Dataset):
         opera_sample_mp_y = math.floor((opera_y1 + opera_y2) / 2)
 
         # project the OPERA sample center to HRIT space; both samples should share the same center
-        hrit_sample_mp_x  = math.floor(((((opera_x2 - c_x_opera) / 6) + c_x_opera) + (((opera_x1 - c_x_opera) / 6) + c_x_opera)) * (1/2))
-        hrit_sample_mp_y  = math.floor(((((opera_y2 - c_y_opera) / 6)  + c_y_opera) + (((opera_y1 - c_y_opera) / 6) + c_y_opera)) * (1/2))
+        hrit_sample_mp_x  = math.floor(((((opera_x2 - c_x_opera) / 6)  + c_x_hrit) + (((opera_x1 - c_x_opera) / 6) + c_x_hrit)) * (1/2))
+        hrit_sample_mp_y  = math.floor(((((opera_y2 - c_y_opera) / 6)  + c_y_hrit) + (((opera_y1 - c_y_opera) / 6) + c_y_hrit)) * (1/2))
 
         # calculate the HRIT ROI relative to its center
         hrit_x1 = hrit_sample_mp_x - 16
