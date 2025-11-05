@@ -111,12 +111,12 @@ def train(
     _class                  = getattr(module, class_name)
     optimizer:nn.Module     = _class(model.parameters(), **config["optimizer"]["kwargs"])
 
-    model.cuda(device)
-
     # HACK: a pretty terrible way to load model weights from a full .pth model store
     if config['model']['weights'] != None:
         full_model        = torch.load(config['model']['weights'], weights_only=False)
         model._parameters = full_model._parameters
+
+    model.cuda(device)
 
     train_loss.cuda(device)
     val_loss.cuda(device)

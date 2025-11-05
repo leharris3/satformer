@@ -90,20 +90,19 @@ class ClassWeightedCategoricalCrossEntropy(nn.Module):
         super().__init__(*args, **kwargs)
         
         freqs        = torch.tensor(Y_REG_FREQ_BINS)
-        freqs       += (1 / len(freqs)) # no zero weights
+        freqs       += (1) # no zero weights
 
         # log weights
-        log_rel_freqs = (torch.log(1 / freqs))
-        
-        # -> [0, 1]
-        self.weights  = (log_rel_freqs - log_rel_freqs.min()) / (log_rel_freqs.max() - log_rel_freqs.min())
+        rel_freqs    = (1 / (freqs / freqs.sum()))
+        self.weights = rel_freqs
 
 
     def forward(self, logits:torch.Tensor, target:torch.Tensor):
 
         self.weights = self.weights.to(target.device)
-        pred = F.softmax(logits, dim=1)
-        return F.binary_cross_entropy(pred, target, weight=self.weights)
+        
+        # pred = F.softmax(logits, dim=1)
+        return F.cross_entropy(logits, target, weight=self.weights, reduction="sum")
 
 
 if __name__ == "__main__":
@@ -112,3 +111,4 @@ if __name__ == "__main__":
     y     = torch.rand(2, 128)
     y_hat = torch.rand(2, 128)
     loss(y_hat, y)
+    breakpoint()

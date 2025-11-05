@@ -1,4 +1,5 @@
 import os
+import math
 import torch
 import h5py
 import random
@@ -252,6 +253,15 @@ class Sat2RadDataset(Dataset):
         that means averaging per hour and summing the 4 hours, 
         i.e., averaging the 16 slots and multiplying by 4 (or summing the 16 slots and diving by 4).*
 
+        # [HRIT, OPERA]
+        region_0: ((24644, 11, 252, 252), (24644, 1, 1512, 1512))
+        region_1: ((20308, 11, 252, 252), (24644, 1, 252, 252))
+        region_2: ((20308, 11, 252, 252), (20308, 1, 252, 252))
+        region_3: ((20308, 11, 252, 252), (24644, 1, 252, 252))
+        region_4: ((20308, 11, 252, 252), (24644, 1, 252, 252))
+        region_5: ((20308, 11, 252, 252), (20308, 1, 1512, 1512))
+        region_6: ((24644, 11, 252, 252), (20308, 1, 252, 252))
+
         input
         --- 
         - :X:
@@ -270,44 +280,78 @@ class Sat2RadDataset(Dataset):
         # * T1, T2 are DIFFERENT for trainset; (T2 < T1)
         # * verify that index starts at 0 for both datasets
 
+        # 1. select a random region
         region_idx = random.randint(0, len(self.hrit_buffer) - 1)
 
         # [T1, 11, 252, 252]        
         hrit_ds  = self.hrit_buffer[region_idx]['REFL-BT']
 
-        # [T2, 1, 252, 252]
+        # [T2, 1, 252 or 1512, 252 or 1512]
         opera_ds = self.opera_buffer[region_idx]['rates.crop']
-        
-        
+
+        # calculate spatial center points of both datasets
+        # it is given to us by the organizers that these points are indentical in a shared space
+        W_opera, H_opera     = opera_ds.shape[2], opera_ds.shape[3]
+        W_hrit,  H_hrit      = hrit_ds.shape[2] , hrit_ds.shape[3]
+        c_x_opera, c_y_opera = math.floor(W_opera / 2), math.floor(H_opera / 2)
+        c_x_hrit , c_y_hrit  = math.floor(W_hrit  / 2), math.floor(H_hrit  / 2)
+
+        # choose a random (32x32) patch from the OPERA dataset
+        opera_x1 = random.randint(0, W_opera - 32 - 1)
+        opera_x2 = opera_x1 + 32
+        opera_y1 = random.randint(0, H_opera - 32 - 1)
+        opera_y2 = opera_y1 + 32
+
+        assert opera_x2-opera_x1 == 32
+        assert opera_y2-opera_y1 == 32
+
+        # calculate the center of this random sample in OPERA space
+        opera_sample_mp_x = math.floor((opera_x1 + opera_x2) / 2)
+        opera_sample_mp_y = math.floor((opera_y1 + opera_y2) / 2)
+
+        # project the OPERA sample center to HRIT space; both samples should share the same center
+        hrit_sample_mp_x  = math.floor(((((opera_x2 - c_x_opera) / 6) + c_x_opera) + (((opera_x1 - c_x_opera) / 6) + c_x_opera)) * (1/2))
+        hrit_sample_mp_y  = math.floor(((((opera_y2 - c_y_opera) / 6)  + c_y_opera) + (((opera_y1 - c_y_opera) / 6) + c_y_opera)) * (1/2))
+
+        # calculate the HRIT ROI relative to its center
+        hrit_x1 = hrit_sample_mp_x - 16
+        hrit_y1 = hrit_sample_mp_y - 16
+
+        # HACK: manually check out of bounds
+        if hrit_x1 < 0:
+            hrit_x1 = 0
+        if hrit_y1 < 0:
+            hrit_y1 = 0
+        if hrit_x1 > W_hrit - 32 - 1:
+            hrit_x1 = W_hrit - 32 - 1
+        if hrit_y1 > H_hrit - 32 - 1:
+            hrit_y1 = H_hrit - 32 - 1
+
+        hrit_x2 = hrit_x1 + 32
+        hrit_y2 = hrit_y1 + 32
+
+        assert hrit_x2-hrit_x1 == 32
+        assert hrit_y2-hrit_y1 == 32
+
         # calculate starting temporal index of this sample
-        
         T       = min(hrit_ds.shape[0], opera_ds.shape[0])
         start_T = random.randint(0, T - Sat2RadDataset.TOTAL_SAMPLE_LEN_T - 1)
-
         
-        # choose random (32x32) spatial crop
-        H, W = Sat2RadDataset.SAMPLE_FULL_H, Sat2RadDataset.SAMPLE_FULL_W
-        H_prime = random.randint(0, H - Sat2RadDataset.SAMPLE_H - 1)
-        W_prime = random.randint(0, W - Sat2RadDataset.SAMPLE_W - 1)
-
-
         # input: 1H satellite data
         # [T=4, C=11, H=32, W=32]
-        X      = hrit_ds[start_T:start_T+4, :, H_prime:H_prime+32, W_prime:W_prime+32].to_numpy()
+        X      = hrit_ds[start_T:start_T+4, :, hrit_x1:hrit_x2, hrit_y1:hrit_y2].to_numpy()
         X      = torch.Tensor(X)
-
 
         # soft label: 4H proceeding rainfall
         # [T=16, C=1, H=32, W=32]
-        y = opera_ds[start_T+4:start_T+20, :, H_prime:H_prime+32, W_prime:W_prime+32].to_numpy()
+        y = opera_ds[start_T+4:start_T+20, :, opera_x1:opera_x2, opera_y1:opera_y2].to_numpy()
         y = torch.Tensor(y)
         
         # clip @0; it can't rain a negative amount; large negative values in our datasets
         y = y.clip(0)
 
         # fill `nan` values with 0.0
-        y = y.nan_to_num_()
-
+        y = y.nan_to_num()
 
         # wfc challenge #1 target
         # * average hourly cummulative rainfall
@@ -323,7 +367,6 @@ class Sat2RadDataset(Dataset):
         y_reg = y_reg / 4              #  "diving by 4"
         y_reg = y_reg.unsqueeze(0)     # -> [1]
 
-
         # [ds.min, ds.max] -> [0, 1]
         X_norm     = self.X_pre_proc(X)
         y_reg_norm = self.y_reg_pre_proc(y_reg)
@@ -331,7 +374,6 @@ class Sat2RadDataset(Dataset):
 
         # [1] -> [129]; get categorical label for classification/probabilistic task formulation
         y_one_hot_label = Sat2RadDataset.get_y_reg_norm_cat_label(y_reg_norm[0].item())
-
 
         return {
             "X"             : X,
@@ -462,13 +504,11 @@ if __name__ == "__main__":
     y_reg_max   = 0
     y_reg_norms = None
 
-    for _ in range(50):
+    for sample in tqdm(dl):
 
-        for sample in tqdm(dl):
-
-            if y_reg_norms is None: 
-                y_reg_norms = torch.Tensor(sample["y_reg_norm"])
-            else:
-                y_reg_norms = torch.cat([y_reg_norms, sample["y_reg_norm"]])
+        if y_reg_norms is None: 
+            y_reg_norms = torch.Tensor(sample["y_reg_norm"])
+        else:
+            y_reg_norms = torch.cat([y_reg_norms, sample["y_reg_norm"]])
 
     breakpoint()
