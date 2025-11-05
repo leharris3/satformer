@@ -43,9 +43,9 @@
   "dataloader": {
     "train": {
       "kwargs": {
-        "batch_size": 128,
+        "batch_size": 1,
         "shuffle": false,
-        "num_workers": 16
+        "num_workers": 0
       }
     },
     "val": {
@@ -71,7 +71,7 @@
     "exp_name": "timesformer-cat-loss=[NOBIN]-cls-weightedCCE-sum-lr=1e-5-BS=128",
     "log_interval": 100,
     "wandb": {
-      "log": true,
+      "log": false,
       "api_key": "3d8c09b359c1abc995fd03c27398c41afce857c1",
       "save_figure_step": 100
     }

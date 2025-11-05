@@ -235,7 +235,7 @@ class Sat2RadDataset(Dataset):
         
         # HACK: occasionally we're getting enormous values (e.g., 2000+)
         # TODO: investigate
-        i = min(i, len(Y_REG_NORM_BINS.shape) - 1)
+        i = min(i, len(Y_REG_NORM_BINS) - 1)
 
         one_hot_label    = torch.zeros(Y_REG_NORM_BINS.shape)
         one_hot_label[i] = 1
@@ -371,6 +371,8 @@ class Sat2RadDataset(Dataset):
         X_norm     = self.X_pre_proc(X)
         y_reg_norm = self.y_reg_pre_proc(y_reg)
 
+        # HACK
+        # if y_reg < 0.0001: self.get_item_train_val(index)
 
         # [1] -> [129]; get categorical label for classification/probabilistic task formulation
         y_one_hot_label = Sat2RadDataset.get_y_reg_norm_cat_label(y_reg_norm[0].item())
@@ -498,7 +500,7 @@ if __name__ == "__main__":
     import torch
 
     ds = Sat2RadDataset(split="train")
-    dl = torch.utils.data.DataLoader(ds, batch_size=16, num_workers=16)
+    dl = torch.utils.data.DataLoader(ds, batch_size=1, num_workers=0)
 
     # [11, 4]; max, min, mean, std
     y_reg_max   = 0
@@ -510,5 +512,3 @@ if __name__ == "__main__":
             y_reg_norms = torch.Tensor(sample["y_reg_norm"])
         else:
             y_reg_norms = torch.cat([y_reg_norms, sample["y_reg_norm"]])
-
-    breakpoint()

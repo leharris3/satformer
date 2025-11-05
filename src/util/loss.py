@@ -96,6 +96,8 @@ class ClassWeightedCategoricalCrossEntropy(nn.Module):
         rel_freqs    = (1 / (freqs / freqs.sum()))
         self.weights = rel_freqs
 
+        breakpoint()
+
 
     def forward(self, logits:torch.Tensor, target:torch.Tensor):
 

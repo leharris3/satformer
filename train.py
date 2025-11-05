@@ -143,6 +143,8 @@ def train(
             y_hat:torch.Tensor = model(X)
 
             loss = train_loss(y_hat, y)
+
+            breakpoint()
             
             # backprop and step
             loss.backward()
