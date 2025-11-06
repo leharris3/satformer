@@ -1,7 +1,7 @@
 {
   "global": {
     "num_epochs": 200,
-    "device": 2
+    "device": 0
   },
   "model": {
     "target": "src.model.timesformer.timesformer_pytorch.TimeSformer",
@@ -18,7 +18,7 @@
       "attn_dropout": 0.1,
       "ff_dropout": 0.1
     },
-    "weights":"/playpen-ssd/levi/w4c/w4c-25/__exps__/2025-11-04_12-15-32_timesformer-categorical-loss=class-weightedCCE-lr=1e-5-BS=128/best.pth"
+    "weights":"/playpen-ssd/levi/w4c/w4c-25/__exps__/2025-11-05_18-47-44_timesformer-cat-loss-cls-weightedCCE-sum-[0-1]--lr=1e-5-BS=128/best.pth"
   },
   "optimizer": {
     "target": "torch.optim.Adam",
@@ -43,9 +43,9 @@
   "dataloader": {
     "train": {
       "kwargs": {
-        "batch_size": 1,
+        "batch_size": 128,
         "shuffle": false,
-        "num_workers": 0
+        "num_workers": 16
       }
     },
     "val": {
@@ -68,10 +68,10 @@
   },
   "logging": {
     "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
-    "exp_name": "timesformer-cat-loss=[NOBIN]-cls-weightedCCE-sum-lr=1e-5-BS=128",
+    "exp_name": "timesformer-cat-loss-cls-weightedCCE-sum-[0-1]-[NOT-LOG]-lr=1e-5-BS=128",
     "log_interval": 100,
     "wandb": {
-      "log": false,
+      "log": true,
       "api_key": "3d8c09b359c1abc995fd03c27398c41afce857c1",
       "save_figure_step": 100
     }

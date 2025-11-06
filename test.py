@@ -148,7 +148,11 @@ def test(
             for _bin, _prob in zip(rb, cp):
                 
                 # HACK: examples show int bins
-                _bin = int(_bin.item())
+                # _bin = int(_bin.item())
+                
+                # TODO: test - can the wfc bench handle floats?
+                _bin = float(_bin.item())
+
                 preds[csv_fp].append([batch['Case-id'][0], _bin, _prob.item()])
 
     # save all predictions as csvs
