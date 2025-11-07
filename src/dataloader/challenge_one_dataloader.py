@@ -16,8 +16,7 @@ from torch.utils.data import Dataset
 from concurrent.futures import ThreadPoolExecutor
 
 from src.util.scale import scale_zero_to_one
-from src.dataloader.dataset_stats import X_MIN, X_MAX, Y_REG_MIN, Y_REG_MAX
-from src.dataloader.dataset_stats import Y_REG_NORM_BINS, Y_REG_NORM_BIN_STEP
+from src.dataloader.dataset_stats import X_MIN, X_MAX, Y_REG_MIN, Y_REG_MAX, Y_REG_NORM_MAX
 
 
 # quite some annoying UserWarnings thrown by xarray 
@@ -26,7 +25,8 @@ warnings.simplefilter("ignore")
 
 
 WFC_ROOT_DIR    = "/playpen-ssd/levi/w4c/w4c-25/weather4cast_data"
-WFC_C1_TEST_DIR = "weather4cast_data/challenge_one"
+WFC_C1_TEST_DIR = "/playpen-ssd/levi/w4c/w4c-25/weather4cast_data/challenge_one"
+Y_REG_NORMS_FP  = "/playpen-ssd/levi/w4c/w4c-25/___old___/11-4-25-y_reg_norms.pth"
 
 
 class Sat2RadDataset(Dataset):
@@ -45,6 +45,7 @@ class Sat2RadDataset(Dataset):
     def __init__(
             self, 
             split="train",
+            n_classes=128,
         ):
 
         super().__init__()
@@ -187,6 +188,31 @@ class Sat2RadDataset(Dataset):
             # print(f"Warning: changing steps-per-epoch from {self.steps_per_epoch} -> {total_T // 20}")
             self.total_T = total_T
 
+        # *** calculate dataset statistics ****
+        assert n_classes > 0, f"Number of classes must be >= 1"
+        self.num_classes = n_classes
+
+        y_regs:torch.Tensor  = torch.load(Y_REG_NORMS_FP)
+        data                 = y_regs.squeeze()
+        # p_arr                = [float(v) for v in data]
+
+        # [N_classes]
+        self.y_reg_norm_bins = torch.arange(0, data.max(), data.max() / self.num_classes)
+        freq = torch.zeros(self.y_reg_norm_bins.shape)
+
+        for i, _bin in enumerate(self.y_reg_norm_bins):
+            start = _bin
+            if i <= (len(self.y_reg_norm_bins) - 2):
+                end = self.y_reg_norm_bins[i+1]
+            else:
+                end = 10000
+            # number of samples in a bin
+            count = ((data >= start) & (data < end)).sum()
+            freq[i] = count
+        
+        self.y_reg_norm_bin_step   = Y_REG_NORM_MAX / self.num_classes
+        self.y_reg_norm_bin_counts = freq
+
     def __len__(self) -> int:
         return self.steps_per_epoch
     
@@ -216,8 +242,7 @@ class Sat2RadDataset(Dataset):
         y_reg = (S * y_reg_norm) - Y_REG_MIN
         return y_reg
      
-    @staticmethod
-    def get_y_reg_norm_cat_label(y_reg_norm: float) -> torch.Tensor:
+    def get_y_reg_norm_cat_label(self, y_reg_norm: float) -> torch.Tensor:
         """
         args
         ---
@@ -231,17 +256,21 @@ class Sat2RadDataset(Dataset):
         assert y_reg_norm >= 0.0
 
         # round y to the nearest multiple of bin step
-        i                = int(round(y_reg_norm / Y_REG_NORM_BIN_STEP))
+        i                = int(round(y_reg_norm / self.y_reg_norm_bin_step))
         
         # HACK: occasionally we're getting enormous values (e.g., 2000+)
         # TODO: investigate
-        i = min(i, len(Y_REG_NORM_BINS) - 1)
+        i = min(i, len(self.y_reg_norm_bins) - 1)
 
-        one_hot_label    = torch.zeros(Y_REG_NORM_BINS.shape)
+        one_hot_label    = torch.zeros(self.y_reg_norm_bins.shape)
         one_hot_label[i] = 1
 
-        # [N_CLASSES]
-        return one_hot_label.squeeze()
+        # HACK: replace one-hot label with a gaussian centered at the onehot idx
+        # sigma      = 0.25
+        # gauss      = torch.exp(-0.5 * ((torch.arange(len(one_hot_label)) - i) / sigma)**2)
+        # gauss_norm = gauss / gauss.sum()
+
+        return one_hot_label
 
     def get_item_train_val(self, index: int) -> dict:
         """
@@ -371,11 +400,11 @@ class Sat2RadDataset(Dataset):
         X_norm     = self.X_pre_proc(X)
         y_reg_norm = self.y_reg_pre_proc(y_reg)
 
-        # HACK
-        # if y_reg < 0.0001: self.get_item_train_val(index)
+        # # HACK
+        # if y_reg < 0.1: self.get_item_train_val(index)
 
         # [1] -> [129]; get categorical label for classification/probabilistic task formulation
-        y_one_hot_label = Sat2RadDataset.get_y_reg_norm_cat_label(y_reg_norm[0].item())
+        y_one_hot_label = self.get_y_reg_norm_cat_label(y_reg_norm[0].item())
 
         return {
             "X"             : X,
@@ -499,15 +528,14 @@ if __name__ == "__main__":
 
     import torch
 
-    ds = Sat2RadDataset(split="train")
-    dl = torch.utils.data.DataLoader(ds, batch_size=1, num_workers=0)
+    ds = Sat2RadDataset(split="train", n_classes=256)
+    dl = torch.utils.data.DataLoader(ds, batch_size=1, num_workers=0,)
 
     # [11, 4]; max, min, mean, std
     y_reg_max   = 0
     y_reg_norms = None
 
     for sample in tqdm(dl):
-
         if y_reg_norms is None: 
             y_reg_norms = torch.Tensor(sample["y_reg_norm"])
         else:

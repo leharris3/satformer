@@ -159,7 +159,7 @@ def train(
                         "train_cce_loss" : loss.item(),
                         "train_mCSI"     : mean_csi(y_hat, y),
                         "train_mF1"      : mean_f1(y_hat, y),
-                        "train_mCRPS"    : mean_crps(y_hat, y),
+                        # "train_mCRPS"    : mean_crps(y_hat, y),
                     }
                 )
 
@@ -202,7 +202,7 @@ def train(
                             "val_cce_loss": loss.item(),
                             "val_mCSI"    : mean_csi(y_hat, y),
                             "val_mF1"     : mean_f1(y_hat, y),
-                            "val_mCRPS"   : mean_crps(y_hat, y),
+                            # "val_mCRPS"   : mean_crps(y_hat, y),
                             }
                     )
 

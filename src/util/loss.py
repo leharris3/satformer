@@ -7,6 +7,7 @@ from typing import Optional, Sequence, List
 from scipy.interpolate import PchipInterpolator
 from src.util.kde_helpers import Y_REG_MAG_BINS, weighted_gaussian_kde
 from src.dataloader.dataset_stats import Y_REG_FREQ_BINS
+from src.dataloader.challenge_one_dataloader import Sat2RadDataset
 
 
 class MSE(nn.Module):
@@ -81,23 +82,28 @@ class CategoricalCrossEntropy(nn.Module):
         
         pred = F.softmax(logits, dim=1)
         return F.binary_cross_entropy(pred, target)
-    
+
 
 class ClassWeightedCategoricalCrossEntropy(nn.Module):
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, n_classes: int=128, *args, **kwargs):
         
         super().__init__(*args, **kwargs)
-        
-        freqs        = torch.tensor(Y_REG_FREQ_BINS)
+
+        freqs        = ClassWeightedCategoricalCrossEntropy.calculate_freqs(n_classes)
         freqs       += (1) # no zero weights
 
         # log weights
         rel_freqs    =  1 / (freqs / freqs.sum())
         rel_freqs    = (rel_freqs - rel_freqs.min()) / (rel_freqs.max() - rel_freqs.min())
+
         # rel_freqs    = rel_freqs.clip(.1, 1.)
         self.weights = rel_freqs
 
+    @staticmethod
+    def calculate_freqs(n_classes):
+        dataset = Sat2RadDataset(n_classes=n_classes)
+        return torch.tensor(dataset.y_reg_norm_bin_counts)
 
     def forward(self, logits:torch.Tensor, target:torch.Tensor):
 
@@ -109,8 +115,8 @@ class ClassWeightedCategoricalCrossEntropy(nn.Module):
 
 if __name__ == "__main__":
 
-    loss = ClassWeightedCategoricalCrossEntropy()
-    y     = torch.rand(2, 128)
-    y_hat = torch.rand(2, 128)
+    loss = ClassWeightedCategoricalCrossEntropy(n_classes=256)
+    y     = torch.rand(2, 256)
+    y_hat = torch.rand(2, 265)
     loss(y_hat, y)
     breakpoint()

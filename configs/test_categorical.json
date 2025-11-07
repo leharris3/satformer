@@ -10,19 +10,19 @@
       "image_size": 32,
       "patch_size": 4,
       "num_frames": 4,
-      "num_classes": 128,
+      "num_classes": 10,
       "depth": 12,
       "heads": 8,
       "dim_head": 64,
       "attn_dropout": 0.1,
       "ff_dropout": 0.1
     },
-    "weights": "/playpen-ssd/levi/w4c/w4c-25/__exps__/2025-11-05_19-11-52_timesformer-cat-loss-cls-weightedCCE-sum-[0-1]-[NOT-LOG]-lr=1e-5-BS=128/best.pth"
+    "weights": "/playpen-ssd/levi/w4c/w4c-25/__exps__/2025-11-05_19-11-52_[BEST]-timesformer-cat-loss-cls-weightedCCE-sum-[0-1]-[NOT-LOG]-lr=1e-5-BS=128/best.pth"
   },
   "dataset": {
     "test": {
       "target": "src.dataloader.challenge_one_dataloader.Sat2RadDataset",
-      "kwargs": {"split": "test"}
+      "kwargs": {"split": "test", "n_classes": 128}
     }
   },
   "dataloader": {
@@ -34,15 +34,9 @@
       }
     }
   },
-  "loss": {
-    "test": {
-      "target": "src.util.loss.L1",
-      "kwargs": {}
-    }
-  },
   "logging": {
     "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
-    "exp_name": "timesformer-cat-loss-cls-weightedCCE-sum-[0-1]-[NOLOG]-lr=1e-5-BS=128",
+    "exp_name": "timesformer-cat-loss-cls-weightedCCE-sum-[0-1]-[NOT-LOG]-lr=1e-5-BS=128-c20",
     "log_interval": 100,
     "wandb": {
       "log": false,
