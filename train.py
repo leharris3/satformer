@@ -1,10 +1,13 @@
+import warnings
+from pydantic.warnings import UnsupportedFieldAttributeWarning
+warnings.simplefilter("ignore", UnsupportedFieldAttributeWarning)
+
 import os
 import sys
 import wandb
 import random
 import importlib
 import argparse
-import warnings
 import yaml
 import json
 
@@ -15,17 +18,12 @@ from tqdm import tqdm
 from pathlib import Path
 from typing import List, Optional, Any
 from torch.utils.data import DataLoader
+torch.multiprocessing.set_sharing_strategy("file_system")
 
 from src.util.logger import ExperimentLogger
 from src.util.plot.opera import plot_opera_16hr
 from src.util.eval_metrics import mean_csi, mean_f1, mean_crps
 from src.util.scale import scale_zero_to_one, undo_scale_zero_to_one
-
-
-torch.multiprocessing.set_sharing_strategy("file_system")
-
-# quite some annoying UnsupportedFieldAttributeWarnings
-warnings.simplefilter("ignore")
 
 
 def create_module(target: str, **kwargs) -> Any:
@@ -148,9 +146,6 @@ def train(
             loss.backward()
             optimizer.step()
 
-            # calculate loss using original dataset scale; [mm/hr]
-            # rescaled_loss = train_loss(undo_scale_zero_to_one(y_hat, 0, train_dataset.y_reg_max), batch["y_reg"].cuda(device))
-
             if config['logging']["wandb"]["log"] == True:
                 
                 wandb.log(
@@ -159,18 +154,18 @@ def train(
                         "train_cce_loss" : loss.item(),
                         "train_mCSI"     : mean_csi(y_hat, y),
                         "train_mF1"      : mean_f1(y_hat, y),
-                        # "train_mCRPS"    : mean_crps(y_hat, y),
+                        "train_mCRPS"    : mean_crps(y_hat, y),
                     }
                 )
 
                 save_fig_step = float(config['logging']['wandb']['save_figure_step'])
                 
-                if step % save_fig_step == 0:
-                    # log a 16-image mosaic
-                    # TODO: one day... add support for flexible callbacks
-                    y_og = batch["y"]
-                    opera_input_fig = plot_opera_16hr(y_og)
-                    wandb.log({"(y) OPERA": wandb.Image(opera_input_fig)})
+                # if step % save_fig_step == 0:
+                #     # log a 16-image mosaic
+                #     # TODO: one day... add support for flexible callbacks
+                #     y_og = batch["y"]
+                #     opera_input_fig = plot_opera_16hr(y_og)
+                #     wandb.log({"(y) OPERA": wandb.Image(opera_input_fig)})
 
         # validation
         model.eval()
@@ -202,16 +197,16 @@ def train(
                             "val_cce_loss": loss.item(),
                             "val_mCSI"    : mean_csi(y_hat, y),
                             "val_mF1"     : mean_f1(y_hat, y),
-                            # "val_mCRPS"   : mean_crps(y_hat, y),
+                            "val_mCRPS"   : mean_crps(y_hat, y),
                             }
                     )
 
-                    save_fig_step = float(config['logging']['wandb']['save_figure_step'])
-                    if step % save_fig_step == 0:
-                        # log a 16-image mosaic
-                        y_og = batch["y"]
-                        opera_input_fig = plot_opera_16hr(y_og)
-                        wandb.log({"(y) OPERA": wandb.Image(opera_input_fig)})
+                    # save_fig_step = float(config['logging']['wandb']['save_figure_step'])
+                    # if step % save_fig_step == 0:
+                    #     # log a 16-image mosaic
+                    #     y_og = batch["y"]
+                    #     opera_input_fig = plot_opera_16hr(y_og)
+                    #     wandb.log({"(y) OPERA": wandb.Image(opera_input_fig)})
 
                 # ++
                 num_val_steps += 1

@@ -51,73 +51,38 @@ def mean_crps(logits:torch.Tensor, target:torch.Tensor) -> float:
     args
     ---
     :logits: unnormalized model class preds
+    - [B, N]
     :target: one-hot categorical label with identical shape to `logits`
+    - [B, N]
     """
+
+    assert logits.shape == target.shape, f"Shape of logits: {logits.shape} must match target shape: {target.shape}"
 
     logits = logits.detach().clone()
     target = target.detach().clone()
-
-    max_i  = torch.argmax(target, dim=1,)
-    labels = Y_REG_NORM_BINS.cuda(target.device)[max_i]
     
-    max_i        = torch.argmax(logits, dim=1,)
-    pred         = Y_REG_NORM_BINS.cuda(target.device)[max_i]
+    B, N   = logits.shape
+
+    label  = torch.zeros(logits.shape).to(logits.device)
+    max_i  = torch.argmax(target, dim=1)
+
+    # TODO: replace with something efficient/vectorized
+    for b, idx in enumerate(max_i): label[b, idx] = 1
+
+    # ground truth degenerate target
+    label_cdf = label.cumsum(dim=1)
+
+    # predict cdf from logits
+    pred_cdf  = F.softmax(logits, dim=1).cumsum(dim=1)
+
+    mask = (pred_cdf >= label_cdf) * 1
+
+    crps = ((((pred_cdf - label_cdf) * mask) + ((label_cdf - pred_cdf) * ~mask)) ** 2).sum(dim=1).mean()
+    return crps
+
+
+if __name__ == "__main__":
     
-    # [B] -> [B, 2]
-    if len(pred.shape) < 2:
-        pred = pred.unsqueeze(1)
-        pred = pred.repeat(1, 2)
-
-    crps_metric  = ContinuousRankedProbabilityScore().to(target.device)
-
-    # y:     [B, N]
-    # y_hat: [B]    
-    return crps_metric(pred, labels).item()
-
-# def mean_crps
-
-
-
-# x = torch.tensor([[0.2, 0.7], [0.9, 0.3]])
-# y = torch.tensor([[0.4, 0.2], [0.8, 0.6]])
-# csi = CriticalSuccessIndex(0.5)
-# result = csi(x, y)
-
-
-# # Example: Binary classification
-# num_classes = 2
-# f1_metric = F1Score(task="binary", num_classes=num_classes)
-
-# # Example: Multiclass classification
-# # num_classes = 5
-# # f1_metric = F1Score(task="multiclass", num_classes=num_classes, average="macro") # or "weighted", "micro"
-
-# # Generate some example predictions and targets
-# preds = torch.tensor([0, 1, 0, 1, 0])
-# target = torch.tensor([0, 1, 1, 0, 0])
-
-# # Compute F1 score
-# f1_score = f1_metric(preds, target)
-# print(f"F1 Score: {f1_score}")
-
-
-# import torch
-
-# # Create an instance of the CRPS metric
-# crps_metric = ContinuousRankedProbabilityScore()
-
-# # Generate some example predictions (e.g., from a probabilistic model)
-# # These represent the predicted cumulative distribution function (CDF)
-# # For simplicity, let's use a sorted tensor as an empirical CDF
-# preds = torch.tensor([
-#     [0.1, 0.2, 0.5, 0.8, 0.9],  # CDF for sample 1
-#     [0.05, 0.3, 0.6, 0.7, 0.95] # CDF for sample 2
-# ])
-
-# # Generate some true observations (targets)
-# targets = torch.tensor([0.6, 0.4])
-
-# # Compute the CRPS
-# score = crps_metric(preds, targets)
-
-# print(f"CRPS: {score.item()}")
+    y      = torch.rand(10, 10)
+    y_hat  = torch.zeros(10, 10)
+    print(mean_crps(y_hat, y))
