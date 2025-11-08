@@ -107,7 +107,7 @@ def test(
 
     device = int(config['global']['device'])
     
-    # HACK:
+    # HACK: we load an entire model object from memory
     model_fp = config['model']['weights']
     model    = torch.load(model_fp, weights_only=False)
 
@@ -124,9 +124,6 @@ def test(
         
         # [B, 128]
         y_hat:torch.Tensor  = model(X)
-
-        # # HACK
-        # y_hat[0][-1] = 0
         
         # get CDF of model predictions
         logits              = F.softmax(y_hat, dim=1)
@@ -147,14 +144,14 @@ def test(
                 
                 # HACK: examples show int bins
                 # * we can do floats, but score drops ):
-                _bin = int(_bin.item())
-                
-                # TODO: test - can the wfc bench handle floats?
-                # _bin = float(_bin.item())
+                # _bin = int(_bin.item())
+                _bin = float(_bin.item())
 
-                # HACK:
-                if _bin > 20.0:
+                # HACK: floor and ceil
+                if _bin > 1000 :
                     preds[csv_fp].append([batch['Case-id'][0], _bin, 1.0])
+                elif _bin < 0.0:
+                    preds[csv_fp].append([batch['Case-id'][0], _bin, 0.0])
                 else:
                     preds[csv_fp].append([batch['Case-id'][0], _bin, _prob.item()])
 

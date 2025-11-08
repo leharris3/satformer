@@ -1,7 +1,8 @@
 {
   "global": {
     "num_epochs": 200,
-    "device": 3
+    "device": [0, 1, 2, 3],
+    "world_size": 4
   },
   "model": {
     "target": "src.model.timesformer.timesformer_pytorch.TimeSformer",
@@ -44,13 +45,16 @@
   },
   "dataloader": {
     "train": {
+      "use_ddp": true,
       "kwargs": {
         "batch_size": 1,
         "shuffle": false,
-        "num_workers": 0
+        "num_workers": 0,
+        "pin_memory": false
       }
     },
     "val": {
+      "use_ddp": true,
       "kwargs": {
         "batch_size": 16,
         "shuffle": false,

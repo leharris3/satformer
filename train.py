@@ -4,26 +4,41 @@ warnings.simplefilter("ignore", UnsupportedFieldAttributeWarning)
 
 import os
 import sys
-import wandb
-import random
-import importlib
-import argparse
 import yaml
 import json
+import wandb
+import random
+import argparse
+import importlib
+
 
 import torch
 import torch.nn as nn
+import torch.multiprocessing as mp
 
 from tqdm import tqdm
 from pathlib import Path
 from typing import List, Optional, Any
+
+from torch.nn import Module
 from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch.distributed import init_process_group, destroy_process_group
+
 torch.multiprocessing.set_sharing_strategy("file_system")
 
 from src.util.logger import ExperimentLogger
 from src.util.plot.opera import plot_opera_16hr
 from src.util.eval_metrics import mean_csi, mean_f1, mean_crps
 from src.util.scale import scale_zero_to_one, undo_scale_zero_to_one
+
+
+def ddp_setup(rank: int, world_size: int) -> None:
+    os.environ["MASTER_ADDR"] = "localhost"
+    os.environ["MASTER_PORT"] = "12355"
+    torch.cuda.set_device(rank)
+    init_process_group(backend="nccl", rank=rank, world_size=world_size)
 
 
 def create_module(target: str, **kwargs) -> Any:
@@ -63,62 +78,41 @@ def setup_logger(
 
 def create_dataloader(
     dataset: torch.utils.data.Dataset, 
+    ddp: False,
     **kwargs
     ) -> DataLoader:
-    return DataLoader(
-        dataset,
-        **kwargs,
-    )
+    
+    if not ddp:
+        dl = DataLoader(dataset, **kwargs)
+    else:
+        dl = DataLoader(dataset, sampler=DistributedSampler(dataset), **kwargs)
+    
+    return dl
 
 
 def train(
-    config: dict,
-    **kwargs
+    rank            : int,
+    config          : dict,
+    logger          : ExperimentLogger,
+    train_dataloader: DataLoader,
+    val_dataloader  : DataLoader,
+    model           : Module,
+    train_loss      : Module,
+    val_loss        : Module,
+    optimizer       : Module,
 ) -> None:
-
-    logger = setup_logger(config)
-
-    if config['logging']["wandb"]["log"] == True:
-
-        wandb.login(key=config['logging']["wandb"]["api_key"])
-        wandb.init(
-            entity="team-levi",
-            project="w4c-challenge",
-            config=config,
-            name=config['logging']['exp_name'],
-        )
-
-    model:nn.Module  = create_module(config['model']['target'],            **config['model']['kwargs'])
-    train_dataset    = create_module(config['dataset']['train']['target'], **config['dataset']['train']['kwargs'])
-    val_dataset      = create_module(config['dataset']['val']['target']  , **config['dataset']['val']['kwargs'])
-    
-    train_dataloader = create_dataloader(train_dataset, **config['dataloader']['train']['kwargs'])
-    val_dataloader   = create_dataloader(val_dataset  , **config['dataloader']['val']['kwargs'])
-
-    # define loss function and optimizer
-    train_loss: torch.nn.Module = create_module(config['loss']['train']['target'], **config['loss']['train']['kwargs'])
-    val_loss  : torch.nn.Module = create_module(config['loss']['val']['target'],   **config['loss']['val']['kwargs'])
 
     # use to save model checkpoints
     best_val_loss = float("inf")
+
     num_epochs    = int(config['global']['num_epochs'])
-    device        = int(config['global']['device'])
+    device        = rank
 
-    module_path, class_name = config['optimizer']['target'].rsplit('.', 1)
-    module                  = importlib.import_module(module_path)
-    _class                  = getattr(module, class_name)
-    optimizer:nn.Module     = _class(model.parameters(), **config["optimizer"]["kwargs"])
-
-    # HACK: a pretty terrible way to load model weights from a full .pth model store
-    if config['model']['weights'] != None:
-        full_model        = torch.load(config['model']['weights'], weights_only=False)
-        model._parameters = full_model._parameters
-
-    model.cuda(device)
-
-    train_loss.cuda(device)
-    val_loss.cuda(device)
-    # model.float()
+    model.cuda(rank)
+    model = DDP(model, device_ids=[rank])
+    
+    train_loss.cuda(rank)
+    val_loss.cuda(rank)
 
     y_label_str      = "y_reg_norm_oh"
 
@@ -217,6 +211,46 @@ def train(
                 logger.save_weights(model, name="best")
                 best_val_loss = avg_val_loss
 
+def main(rank: int, world_size: int, config: dict):
+
+    # init torch.mp process
+    ddp_setup(rank, world_size)
+
+    logger = setup_logger(config)
+    if config['logging']["wandb"]["log"] == True:
+
+        wandb.login(key=config['logging']["wandb"]["api_key"])
+        wandb.init(
+            entity="team-levi",
+            project="w4c-challenge",
+            config=config,
+            name=config['logging']['exp_name'],
+        )
+
+    model:nn.Module  = create_module(config['model']['target'],              **config['model'  ]['kwargs'])
+    train_dataset    = create_module(config['dataset']['train']['target'],   **config['dataset']['train']['kwargs'])
+    val_dataset      = create_module(config['dataset']['val'  ]['target'],   **config['dataset']['val'  ]['kwargs'])
+    
+    train_dataloader = create_dataloader(train_dataset, config['dataloader']['train']['use_ddp'], **config['dataloader']['train']['kwargs'])
+    val_dataloader   = create_dataloader(val_dataset,   config['dataloader']['val'  ]['use_ddp'], **config['dataloader']['val'  ]['kwargs'])
+
+    # define loss function and optimizer
+    train_loss: torch.nn.Module = create_module(config['loss']['train']['target'], **config['loss']['train']['kwargs'])
+    val_loss  : torch.nn.Module = create_module(config['loss']['val'  ]['target'], **config['loss']['val'  ]['kwargs'])
+
+    module_path, class_name = config['optimizer']['target'].rsplit('.', 1)
+    module                  = importlib.import_module(module_path)
+    _class                  = getattr(module, class_name)
+    optimizer:nn.Module     = _class(model.parameters(), **config["optimizer"]["kwargs"])
+
+    # HACK: a pretty terrible way to load model weights from a full .pth model store
+    if config['model']['weights'] != None:
+        full_model        = torch.load(config['model']['weights'], weights_only=False)
+        model._parameters = full_model._parameters
+
+    train(rank, config, logger, train_dataloader, val_dataloader, model, train_loss, val_loss, optimizer)
+    destroy_process_group()
+
 
 if __name__ == "__main__":
 
@@ -235,4 +269,5 @@ if __name__ == "__main__":
     with open(args.config_fp, 'r') as f:
         config = json.load(f)
     
-    train(config, **dict(args._get_kwargs()))
+    kwargs = dict(args._get_kwargs())
+    mp.spawn(main, args=(config['global']['world_size'], config), nprocs=config['global']['world_size'])
