@@ -8,6 +8,7 @@ __TimeSformer-pytorch
 __repos__
 __exps__
 
+tiny-exp
 weather4cast_data
 wandb
 

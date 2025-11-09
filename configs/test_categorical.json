@@ -1,23 +1,24 @@
 {
   "global": {
-    "device": 3
+    "device": 0
   },
   "model": {
-    "target": "src.model.timesformer.timesformer_pytorch.TimeSformer",
+    "target": "src.model.SaTformer.SaTformer.SaTformer",
     "kwargs": {
       "dim": 512,
       "channels": 11,
       "image_size": 32,
       "patch_size": 4,
       "num_frames": 4,
-      "num_classes": 10,
+      "num_classes": 64,
       "depth": 12,
       "heads": 8,
       "dim_head": 64,
       "attn_dropout": 0.1,
-      "ff_dropout": 0.1
+      "ff_dropout": 0.1,
+      "rotary_emb": false
     },
-    "weights": "/playpen-ssd/levi/w4c/w4c-25/__exps__/2025-11-06_18-50-29_[BEST]_timesformer-cat-loss-weightedCCE-sum-[0-1]-lr=1e-5-BS=128-N=64-no-pre-train/best.pth"
+    "weights": "/playpen-ssd/levi/w4c/w4c-25/__exps__/2025-11-09_18-14-18_SaTformer-cat-loss-weightedCCE-sum-[0-1]-lr=1e-5-BS=128-N=64-no-pre-train/best.pth"
   },
   "dataset": {
     "test": {
@@ -36,7 +37,7 @@
   },
   "logging": {
     "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
-    "exp_name": "tf-cat-loss-wCCE-reduce-sum-[0-1]-lr=1e-5-BS=128-c32-f0-float",
+    "exp_name": "SaTFormer-loss-wCCE-reduce-sum-[0-1]-lr=1e-3-BS=128-N=64-c32-f0-float",
     "log_interval": 100,
     "wandb": {
       "log": false,

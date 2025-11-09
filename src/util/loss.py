@@ -7,7 +7,7 @@ from typing import Optional, Sequence, List
 from scipy.interpolate import PchipInterpolator
 from src.util.kde_helpers import Y_REG_MAG_BINS, weighted_gaussian_kde
 from src.dataloader.dataset_stats import Y_REG_FREQ_BINS
-from src.dataloader.challenge_one_dataloader import Sat2RadDataset
+from src.dataloader.challenge_one_dataloader import get_y_reg_bin_counts_step
 
 
 class MSE(nn.Module):
@@ -102,8 +102,8 @@ class ClassWeightedCategoricalCrossEntropy(nn.Module):
 
     @staticmethod
     def calculate_freqs(n_classes):
-        dataset = Sat2RadDataset(n_classes=n_classes)
-        return torch.tensor(dataset.y_reg_norm_bin_counts)
+        _, _, freqs = get_y_reg_bin_counts_step(n_classes)
+        return freqs
 
     def forward(self, logits:torch.Tensor, target:torch.Tensor):
 

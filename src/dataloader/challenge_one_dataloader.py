@@ -29,6 +29,31 @@ WFC_C1_TEST_DIR = "/playpen-ssd/levi/w4c/w4c-25/weather4cast_data/challenge_one"
 Y_REG_NORMS_FP  = "/playpen-ssd/levi/w4c/w4c-25/___old___/11-4-25-y_reg_norms.pth"
 
 
+def get_y_reg_bin_counts_step(n_classes: int):
+
+    y_regs:torch.Tensor  = torch.load(Y_REG_NORMS_FP)
+    data                 = y_regs.squeeze()
+    # p_arr                = [float(v) for v in data]
+
+    # [N_classes]
+    y_reg_norm_bins = torch.arange(0, data.max(), data.max() / n_classes)
+    freq = torch.zeros(y_reg_norm_bins.shape)
+
+    for i, _bin in enumerate(y_reg_norm_bins):
+        start = _bin
+        if i <= (len(y_reg_norm_bins) - 2):
+            end = y_reg_norm_bins[i+1]
+        else:
+            end = 10000
+        # number of samples in a bin
+        count = ((data >= start) & (data < end)).sum()
+        freq[i] = count
+    
+    y_reg_norm_bin_step   = Y_REG_NORM_MAX / n_classes
+    y_reg_norm_bin_counts = freq
+    return y_reg_norm_bins, y_reg_norm_bin_step, y_reg_norm_bin_counts
+
+
 class Sat2RadDataset(Dataset):
 
     TOTAL_TRAIN_T      = 163820
@@ -191,27 +216,7 @@ class Sat2RadDataset(Dataset):
         # *** calculate dataset statistics ****
         assert n_classes > 0, f"Number of classes must be >= 1"
         self.num_classes = n_classes
-
-        y_regs:torch.Tensor  = torch.load(Y_REG_NORMS_FP)
-        data                 = y_regs.squeeze()
-        # p_arr                = [float(v) for v in data]
-
-        # [N_classes]
-        self.y_reg_norm_bins = torch.arange(0, data.max(), data.max() / self.num_classes)
-        freq = torch.zeros(self.y_reg_norm_bins.shape)
-
-        for i, _bin in enumerate(self.y_reg_norm_bins):
-            start = _bin
-            if i <= (len(self.y_reg_norm_bins) - 2):
-                end = self.y_reg_norm_bins[i+1]
-            else:
-                end = 10000
-            # number of samples in a bin
-            count = ((data >= start) & (data < end)).sum()
-            freq[i] = count
-        
-        self.y_reg_norm_bin_step   = Y_REG_NORM_MAX / self.num_classes
-        self.y_reg_norm_bin_counts = freq
+        self.y_reg_norm_bins, self.y_reg_norm_bin_step, self.y_reg_norm_bin_counts = get_y_reg_bin_counts_step(self.num_classes)
 
     def __len__(self) -> int:
         return self.steps_per_epoch
@@ -491,15 +496,15 @@ class Sat2RadDataset(Dataset):
 
         assert x_br_scaled - x_tl_scaled == 32
         assert y_br_scaled - y_tl_scaled == 32
-
         
         # [ds.min, ds.max] -> [0, 1]
         X_norm     = self.X_pre_proc(X)
-
+        X_norm_32  = X_norm[:, :, x_tl_scaled:x_br_scaled, y_tl_scaled:y_br_scaled]
 
         return {
             "X"             : X,
             "X_norm"        : X_norm,
+            "X_norm_32"     : X_norm_32,
             "Case-id"       : case_id,
             "year"          : year,
             "slot-start"    : slot_start,
@@ -528,7 +533,7 @@ if __name__ == "__main__":
 
     import torch
 
-    ds = Sat2RadDataset(split="train", n_classes=256)
+    ds = Sat2RadDataset(split="test", n_classes=64)
     dl = torch.utils.data.DataLoader(ds, batch_size=1, num_workers=0,)
 
     # [11, 4]; max, min, mean, std

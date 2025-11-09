@@ -207,9 +207,14 @@ def train(
 
             # optional: log best/recent model weights
             avg_val_loss = val_running_loss / num_val_steps
-            if avg_val_loss < best_val_loss:
+
+            # HACK: save weights only for 0th process
+            if avg_val_loss < best_val_loss and (rank == 0):
                 logger.save_weights(model, name="best")
                 best_val_loss = avg_val_loss
+            elif (rank == 0):
+                logger.save_weights(model, name="recent")
+                
 
 def main(rank: int, world_size: int, config: dict):
 
@@ -244,9 +249,9 @@ def main(rank: int, world_size: int, config: dict):
     optimizer:nn.Module     = _class(model.parameters(), **config["optimizer"]["kwargs"])
 
     # HACK: a pretty terrible way to load model weights from a full .pth model store
-    if config['model']['weights'] != None:
-        full_model        = torch.load(config['model']['weights'], weights_only=False)
-        model._parameters = full_model._parameters
+    # if config['model']['weights'] != None:
+    #     full_model        = torch.load(config['model']['weights'], weights_only=False)
+    #     model._parameters = full_model._parameters
 
     train(rank, config, logger, train_dataloader, val_dataloader, model, train_loss, val_loss, optimizer)
     destroy_process_group()

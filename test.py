@@ -1,7 +1,8 @@
+import warnings
+from pydantic.warnings import UnsupportedFieldAttributeWarning
+warnings.simplefilter("ignore", UnsupportedFieldAttributeWarning)
+
 import os
-import sys
-import wandb
-import random
 import importlib
 import argparse
 import warnings
@@ -16,7 +17,9 @@ import torch.nn as nn
 
 from tqdm import tqdm
 from pathlib import Path
+
 from torch.utils.data import DataLoader
+from torch.distributed import init_process_group, destroy_process_group
 
 from src.util.logger import ExperimentLogger
 from src.dataloader.challenge_one_dataloader import Sat2RadDataset
@@ -91,36 +94,36 @@ def test(
     os.makedirs(sub_dir_2019)
     os.makedirs(sub_dir_2020)
 
-    if config['logging']["wandb"]["log"] == True:
-
-        wandb.login(key=config['logging']["wandb"]["api_key"])
-        wandb.init(
-            entity="team-levi",
-            project="w4c-challenge",
-            config=config,
-            name=config['logging']['exp_name'],
-        )
-
-    model:nn.Module  = create_module(config['model']['target'],           **config['model']['kwargs'])
-    dataset:Sat2RadDataset          = create_module(config['dataset']['test']['target'], **config['dataset']['test']['kwargs'])
-    dataloader       = create_dataloader(dataset,                         **config['dataloader']['test']['kwargs'])
-
-    device = int(config['global']['device'])
+    model  :nn.Module      = create_module(config['model']['target'],           **config['model']['kwargs'])
+    dataset:Sat2RadDataset = create_module(config['dataset']['test']['target'], **config['dataset']['test']['kwargs'])
+    dataloader             = create_dataloader(dataset,                         **config['dataloader']['test']['kwargs'])
+    device                 = int(config['global']['device'])
     
-    # HACK: we load an entire model object from memory
-    model_fp = config['model']['weights']
-    model    = torch.load(model_fp, weights_only=False)
+    weights_fp        = config['model']['weights']
 
-    model.cuda(device)
-    model.eval()
+    try:
+
+        os.environ["MASTER_ADDR"] = "localhost"
+        os.environ["MASTER_PORT"] = "12356"
+        torch.distributed.init_process_group(backend="gloo", rank=0, world_size=1)
+        wrapper = torch.load(weights_fp, map_location='cpu', weights_only=False)
+        # model = wrapper.module.cpu()
+        state_dict = wrapper.module.state_dict()
+    
+    finally:
+        
+        torch.distributed.destroy_process_group()
+        model.load_state_dict(state_dict)
+        model.to(device)
+        model.eval()
 
     preds = {}
 
-    for step, batch in enumerate(
+    for _, batch in enumerate(
         tqdm(dataloader, total=len(dataset))
     ):
 
-        X    : torch.Tensor = batch["X_norm"].cuda(device)
+        X    : torch.Tensor = batch["X_norm_32"].to(device)
         
         # [B, 128]
         y_hat:torch.Tensor  = model(X)
@@ -145,7 +148,7 @@ def test(
                 # HACK: examples show int bins
                 # * we can do floats, but score drops ):
                 # _bin = int(_bin.item())
-                _bin = float(_bin.item())
+                _bin = int(_bin.item())
 
                 # HACK: floor and ceil
                 if _bin > 1000 :

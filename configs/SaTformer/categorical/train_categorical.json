@@ -5,26 +5,27 @@
     "world_size": 4
   },
   "model": {
-    "target": "src.model.timesformer.timesformer_pytorch.TimeSformer",
+    "target": "src.model.SaTformer.SaTformer.SaTformer",
     "kwargs": {
       "dim": 512,
       "channels": 11,
       "image_size": 32,
       "patch_size": 4,
       "num_frames": 4,
-      "num_classes": 16,
+      "num_classes": 64,
       "depth": 12,
       "heads": 8,
       "dim_head": 64,
       "attn_dropout": 0.1,
-      "ff_dropout": 0.1
+      "ff_dropout": 0.1,
+      "rotary_emb": false
     },
     "weights": null
   },
   "optimizer": {
     "target": "torch.optim.Adam",
     "kwargs": {
-      "lr": 1e-3
+      "lr": 1e-1
     }
   },
   "dataset": {
@@ -32,14 +33,14 @@
       "target": "src.dataloader.challenge_one_dataloader.Sat2RadDataset",
       "kwargs": {
         "split": "train",
-        "n_classes": 16
+        "n_classes": 64
       }
     },
     "val": {
       "target": "src.dataloader.challenge_one_dataloader.Sat2RadDataset",
       "kwargs": {
         "split": "val",
-        "n_classes": 16
+        "n_classes": 64
       }
     }
   },
@@ -65,16 +66,16 @@
   "loss": {
     "train": {
       "target": "src.util.loss.ClassWeightedCategoricalCrossEntropy",
-      "kwargs": {"n_classes": 16}
+      "kwargs": {"n_classes": 64}
     },
     "val": {
       "target": "src.util.loss.ClassWeightedCategoricalCrossEntropy",
-      "kwargs": {"n_classes": 16}
+      "kwargs": {"n_classes": 64}
     }
   },
   "logging": {
     "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
-    "exp_name": "timesformer-cat-loss-weightedCCE-sum-[0-1]-lr=1e-5-BS=128-N=16-no-pre-train",
+    "exp_name": "SaTformer-cat-loss-weightedCCE-sum-[0-1]-lr=1e-1-BS=128-N=64-no-pre-train",
     "log_interval": 100,
     "wandb": {
       "log": true,
