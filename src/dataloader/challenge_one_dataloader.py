@@ -526,15 +526,14 @@ class Sat2RadDataset(Dataset):
 
 if __name__ == "__main__":
     """
-    Every computer vision practitioner knows the drill: 
-    subtract [0.485, 0.456, 0.406], 
-    divide by [0.229, 0.224, 0.225]. 
     """
 
     import torch
 
-    ds = Sat2RadDataset(split="test", n_classes=64)
+    ds = Sat2RadDataset(split="train", n_classes=64)
     dl = torch.utils.data.DataLoader(ds, batch_size=1, num_workers=0,)
+
+    breakpoint()
 
     # [11, 4]; max, min, mean, std
     y_reg_max   = 0

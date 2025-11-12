@@ -18,7 +18,7 @@
       "ff_dropout": 0.1,
       "rotary_emb": false
     },
-    "weights": "/playpen-ssd/levi/w4c/w4c-25/__exps__/2025-11-09_18-14-18_SaTformer-cat-loss-weightedCCE-sum-[0-1]-lr=1e-5-BS=128-N=64-no-pre-train/best.pth"
+    "weights": "/playpen-ssd/levi/w4c/w4c-25/__exps__/2025-11-09_18-34-55_SaTformer-cat-loss-weightedCCE-sum-[0-1]-lr=1e-1-BS=128-N=64-no-pre-train/best.pth"
   },
   "dataset": {
     "test": {
@@ -37,7 +37,7 @@
   },
   "logging": {
     "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
-    "exp_name": "SaTFormer-loss-wCCE-reduce-sum-[0-1]-lr=1e-3-BS=128-N=64-c32-f0-float",
+    "exp_name": "SaTFormer-loss-wCCE-reduce-sum-[0-1]-lr=1e-1-BS=128-N=64-c32-f0-float",
     "log_interval": 100,
     "wandb": {
       "log": false,

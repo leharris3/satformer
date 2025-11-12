@@ -25,7 +25,7 @@
   "optimizer": {
     "target": "torch.optim.Adam",
     "kwargs": {
-      "lr": 1e-1
+      "lr": 1e-5
     }
   },
   "dataset": {
@@ -75,7 +75,7 @@
   },
   "logging": {
     "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
-    "exp_name": "SaTformer-cat-loss-weightedCCE-sum-[0-1]-lr=1e-1-BS=128-N=64-no-pre-train",
+    "exp_name": "SaTformer-cat-loss-weightedCCE-sum-[0-1]-lr=1e-5-BS=128-N=64-no-pre-train",
     "log_interval": 100,
     "wandb": {
       "log": true,

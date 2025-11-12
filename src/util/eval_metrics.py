@@ -1,14 +1,60 @@
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 
+
+from typing import Callable, List, Union
 from torchmetrics.regression import CriticalSuccessIndex, ContinuousRankedProbabilityScore
 from torchmetrics.classification import F1Score
 
 from src.dataloader.dataset_stats import Y_REG_NORM_BINS
 
 
+class BinnedEvalMetric(nn.Module):
+
+    def __init__(self, f: Callable, bins: Union[torch.Tensor, None]=None):
+        """
+        args
+        ---
+        :bins: optional 1D array of probability densities to reweight metric        
+        """
+        
+        super().__init__()
+
+        if bins != None:
+            assert type(bins) is torch.Tensor, f"Error: bins must be a 1D tensor."
+            assert len(bins.shape) == 1, f"Error: bins must be a 1D tensor."
+            assert (bins.sum().item() < 1.01 and bins.sum().item() > 0.99), \
+                f"Error: bins must be a probability density over outputs;   \
+                expected bins.sum() == 1.0, got: {bins.sum().item()}"
+
+        self.f    = f
+        self.bins = bins
+
+    @torch.no_grad()
+    def forward(self, logits:torch.Tensor, target:torch.Tensor) -> float:
+        """
+        args
+        ---
+        :logits: unnormalized model class preds
+        :target: one-hot categorical label with identical shape to `logits`
+        :self.bins: optional 1D array of probability densities to reweight metric
+        """
+        
+        assert self.bins.shape[0] == logits.shape[-1] and self.bins.shape[0] == target.shape[-1], \
+            f"Error: expected len self.bins to equal len logits/target.shape[-1]"
+        
+        unnorm: float = self.f(logits, target, reduce="none")
+        
+        # 1. get class indices
+        max_i         = torch.argmax(logits, dim=1, keepdim=True)
+        scale         = 1 / self.bins[max_i].squeeze()
+        
+        return  (scale * unnorm).mean().item()
+
+
 @torch.no_grad()
-def mean_csi(logits:torch.Tensor, target:torch.Tensor) -> float:
+def mean_csi(logits:torch.Tensor, target:torch.Tensor, reduce="mean") -> float:
     """
     args
     ---
@@ -16,15 +62,22 @@ def mean_csi(logits:torch.Tensor, target:torch.Tensor) -> float:
     :target: one-hot categorical label with identical shape to `logits`
     """
 
+    # [B, N]
     logits = logits.detach().clone()
     target = target.detach().clone()
     
     max_i        = torch.argmax(logits, dim=1, keepdim=True)
     pred         = torch.zeros(logits.shape).to(target.device)
     pred         = pred.scatter(1, max_i, 1.0)
-    csi          = CriticalSuccessIndex(0.5).to(target.device)
-    
+
+    if reduce == "none":
+        csi = CriticalSuccessIndex(0.5, keep_sequence_dim=0).to(target.device)
+        return csi(pred, target)
+    else:
+        csi = CriticalSuccessIndex(0.5).to(target.device)
+
     return csi(pred, target).item()
+    
 
 @torch.no_grad()
 def mean_f1(logits:torch.Tensor, target:torch.Tensor) -> float:
@@ -78,11 +131,14 @@ def mean_crps(logits:torch.Tensor, target:torch.Tensor) -> float:
     mask = (pred_cdf >= label_cdf) * 1
 
     crps = ((((pred_cdf - label_cdf) * mask) + ((label_cdf - pred_cdf) * ~mask)) ** 2).sum(dim=1).mean()
+    
     return crps
 
 
 if __name__ == "__main__":
     
-    y      = torch.rand(10, 10)
-    y_hat  = torch.zeros(10, 10)
-    print(mean_crps(y_hat, y))
+    bins = F.softmax(torch.rand(4), dim=0)
+    m = BinnedEvalMetric(mean_csi, bins)
+    preds = torch.rand(10, 4)
+    target = torch.tensor([[1, 0, 0, 0]] * 10)
+    print(m(preds, target))
