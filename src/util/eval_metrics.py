@@ -5,8 +5,7 @@ import torch.nn.functional as F
 
 from typing import Callable, List, Union
 from torchmetrics.regression import CriticalSuccessIndex, ContinuousRankedProbabilityScore
-from torchmetrics.classification import F1Score
-
+from torchmetrics.classification import F1Score, MulticlassF1Score
 from src.dataloader.dataset_stats import Y_REG_NORM_BINS
 
 
@@ -50,6 +49,7 @@ class BinnedEvalMetric(nn.Module):
         max_i         = torch.argmax(logits, dim=1, keepdim=True)
         scale         = 1 / self.bins[max_i].squeeze()
         
+        # [B] * [B]
         return  (scale * unnorm).mean().item()
 
 
@@ -80,7 +80,7 @@ def mean_csi(logits:torch.Tensor, target:torch.Tensor, reduce="mean") -> float:
     
 
 @torch.no_grad()
-def mean_f1(logits:torch.Tensor, target:torch.Tensor) -> float:
+def mean_f1(logits:torch.Tensor, target:torch.Tensor, reduce="mean") -> float:
     """
     args
     ---
@@ -94,12 +94,20 @@ def mean_f1(logits:torch.Tensor, target:torch.Tensor) -> float:
     max_i        = torch.argmax(logits, dim=1, keepdim=True)
     pred         = torch.zeros(logits.shape).to(target.device)
     pred         = pred.scatter(1, max_i, 1.0)
-    f1_metric    = F1Score(task="multiclass", num_classes=logits.shape[1]).to(target.device)
+
+    pred_idxs = torch.argmax(pred,   dim=-1)
+    targ_idxs = torch.argmax(target, dim=-1)
+
+    if reduce == "none":
+        f1_metric    = MulticlassF1Score(num_classes=logits.shape[-1], multidim_average="samplewise").to(target.device)
+        return f1_metric(pred, target)
+    else:
+        f1_metric    = MulticlassF1Score(num_classes=logits.shape[-1]).to(target.device)
     
     return f1_metric(pred, target).item()
 
 
-def mean_crps(logits:torch.Tensor, target:torch.Tensor) -> float:
+def mean_crps(logits:torch.Tensor, target:torch.Tensor, reduce="mean") -> float:
     """
     args
     ---
@@ -130,15 +138,19 @@ def mean_crps(logits:torch.Tensor, target:torch.Tensor) -> float:
 
     mask = (pred_cdf >= label_cdf) * 1
 
-    crps = ((((pred_cdf - label_cdf) * mask) + ((label_cdf - pred_cdf) * ~mask)) ** 2).sum(dim=1).mean()
-    
-    return crps
+    crps = ((((pred_cdf - label_cdf) * mask) + ((label_cdf - pred_cdf) * ~mask)) ** 2).sum(dim=1)
+
+    if reduce == "mean":
+        return crps.mean()
+    elif reduce == "none":
+        return crps
+    else:
+        raise Exception()
 
 
 if __name__ == "__main__":
     
     bins = F.softmax(torch.rand(4), dim=0)
-    m = BinnedEvalMetric(mean_csi, bins)
+    m = BinnedEvalMetric(mean_crps, bins)
     preds = torch.rand(10, 4)
     target = torch.tensor([[1, 0, 0, 0]] * 10)
-    print(m(preds, target))
