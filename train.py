@@ -1,5 +1,7 @@
 import warnings
 from pydantic.warnings import UnsupportedFieldAttributeWarning
+
+from eval import Sat2RadDataset
 warnings.simplefilter("ignore", UnsupportedFieldAttributeWarning)
 
 import os
@@ -30,7 +32,7 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 from src.util.logger import ExperimentLogger
 from src.util.plot.opera import plot_opera_16hr
-from src.util.eval_metrics import mean_csi, mean_f1, mean_crps
+from src.util.eval_metrics import mean_csi, mean_f1, mean_crps, BinnedEvalMetric
 from src.util.scale import scale_zero_to_one, undo_scale_zero_to_one
 
 
@@ -115,6 +117,19 @@ def train(
     val_loss.cuda(rank)
 
     y_label_str      = "y_reg_norm_oh"
+    
+    # HACK:
+    ds: Sat2RadDataset = train_dataloader.dataset
+    freqs              = torch.tensor(ds.y_reg_norm_bin_counts)
+    freqs              += (1) # no zero weights
+    rel_freqs          = (freqs / freqs.sum())
+    
+    # not really a PDF; sum is ~1.18
+    rel_freqs          = (rel_freqs - rel_freqs.min()) / (rel_freqs.max() - rel_freqs.min())
+    weights            = 1 - rel_freqs
+    b_crps             = BinnedEvalMetric(mean_crps, weights)
+    b_f1               = BinnedEvalMetric(mean_f1, weights)
+    b_csi              = BinnedEvalMetric(mean_csi, weights)
 
     # ---------- training loop ----------
     for epoch in range(num_epochs):
@@ -146,9 +161,9 @@ def train(
                     {
                         "epoch"          : epoch,
                         "train_cce_loss" : loss.item(),
-                        "train_mCSI"     : mean_csi(y_hat, y),
-                        "train_mF1"      : mean_f1(y_hat, y),
-                        "train_mCRPS"    : mean_crps(y_hat, y),
+                        "train_bw_CSI"   : b_csi(y_hat, y),
+                        "train_bw_mF1"   : b_f1(y_hat, y),
+                        "train_bw_mCRPS" : b_crps(y_hat, y),
                     }
                 )
 
@@ -189,9 +204,9 @@ def train(
                         {
                             "epoch"       : epoch,
                             "val_cce_loss": loss.item(),
-                            "val_mCSI"    : mean_csi(y_hat, y),
-                            "val_mF1"     : mean_f1(y_hat, y),
-                            "val_mCRPS"   : mean_crps(y_hat, y),
+                            "val_bw_CSI"  : b_csi(y_hat, y),
+                            "val_bw_F1"   : b_f1(y_hat, y),
+                            "val_bw_CRPS" : b_crps(y_hat, y),
                             }
                     )
 

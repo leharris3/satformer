@@ -1,8 +1,8 @@
 {
   "global": {
     "num_epochs": 200,
-    "device": [0, 1, 2, 3],
-    "world_size": 4
+    "device": [0],
+    "world_size": 1
   },
   "model": {
     "target": "src.model.SaTformer.SaTformer.SaTformer",
@@ -78,7 +78,7 @@
     "exp_name": "SaTformer-cat-loss-weightedCCE-sum-[0-1]-lr=1e-5-BS=128-N=64-no-pre-train",
     "log_interval": 100,
     "wandb": {
-      "log": true,
+      "log": false,
       "api_key": "3d8c09b359c1abc995fd03c27398c41afce857c1",
       "save_figure_step": 100
     }

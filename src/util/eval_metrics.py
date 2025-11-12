@@ -15,7 +15,7 @@ class BinnedEvalMetric(nn.Module):
         """
         args
         ---
-        :bins: optional 1D array of probability densities to reweight metric        
+        :bins: optional 1D array of class-coefficients to reweight metrics
         """
         
         super().__init__()
@@ -23,9 +23,9 @@ class BinnedEvalMetric(nn.Module):
         if bins != None:
             assert type(bins) is torch.Tensor, f"Error: bins must be a 1D tensor."
             assert len(bins.shape) == 1, f"Error: bins must be a 1D tensor."
-            assert (bins.sum().item() < 1.01 and bins.sum().item() > 0.99), \
-                f"Error: bins must be a probability density over outputs;   \
-                expected bins.sum() == 1.0, got: {bins.sum().item()}"
+            # assert (bins.sum().item() < 1.01 and bins.sum().item() > 0.99), \
+            #     f"Error: bins must be a probability density over outputs;   \
+            #     expected bins.sum() == 1.0, got: {bins.sum().item()}"
 
         self.f    = f
         self.bins = bins
@@ -37,7 +37,6 @@ class BinnedEvalMetric(nn.Module):
         ---
         :logits: unnormalized model class preds
         :target: one-hot categorical label with identical shape to `logits`
-        :self.bins: optional 1D array of probability densities to reweight metric
         """
         
         assert self.bins.shape[0] == logits.shape[-1] and self.bins.shape[0] == target.shape[-1], \
@@ -47,7 +46,7 @@ class BinnedEvalMetric(nn.Module):
         
         # 1. get class indices
         max_i         = torch.argmax(logits, dim=1, keepdim=True)
-        scale         = 1 / self.bins[max_i].squeeze()
+        scale         = self.bins[max_i].squeeze()
         
         # [B] * [B]
         return  (scale * unnorm).mean().item()

@@ -1,7 +1,7 @@
 import os
 import math
 import torch
-import h5py
+import sys
 import random
 import warnings
 import numpy as np
@@ -31,26 +31,32 @@ Y_REG_NORMS_FP  = "/playpen-ssd/levi/w4c/w4c-25/___old___/11-4-25-y_reg_norms.pt
 
 def get_y_reg_bin_counts_step(n_classes: int):
 
+    # emp distribution of train label values
     y_regs:torch.Tensor  = torch.load(Y_REG_NORMS_FP)
     data                 = y_regs.squeeze()
-    # p_arr                = [float(v) for v in data]
 
     # [N_classes]
     y_reg_norm_bins = torch.arange(0, data.max(), data.max() / n_classes)
-    freq = torch.zeros(y_reg_norm_bins.shape)
+    freq            = torch.zeros(y_reg_norm_bins.shape)
 
     for i, _bin in enumerate(y_reg_norm_bins):
+
         start = _bin
         if i <= (len(y_reg_norm_bins) - 2):
             end = y_reg_norm_bins[i+1]
         else:
-            end = 10000
-        # number of samples in a bin
-        count = ((data >= start) & (data < end)).sum()
+            end = sys.maxsize - 1
+
+        # num samples/bin
+        count   = ((data >= start) & (data < end)).sum()
         freq[i] = count
     
     y_reg_norm_bin_step   = Y_REG_NORM_MAX / n_classes
     y_reg_norm_bin_counts = freq
+    
+    # to avoid any divide by zero errors when calculating pmfs
+    y_reg_norm_bin_counts += 1
+
     return y_reg_norm_bins, y_reg_norm_bin_step, y_reg_norm_bin_counts
 
 
@@ -532,15 +538,3 @@ if __name__ == "__main__":
 
     ds = Sat2RadDataset(split="train", n_classes=64)
     dl = torch.utils.data.DataLoader(ds, batch_size=1, num_workers=0,)
-
-    breakpoint()
-
-    # [11, 4]; max, min, mean, std
-    y_reg_max   = 0
-    y_reg_norms = None
-
-    for sample in tqdm(dl):
-        if y_reg_norms is None: 
-            y_reg_norms = torch.Tensor(sample["y_reg_norm"])
-        else:
-            y_reg_norms = torch.cat([y_reg_norms, sample["y_reg_norm"]])
