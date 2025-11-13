@@ -32,13 +32,13 @@ torch.multiprocessing.set_sharing_strategy("file_system")
 
 from src.util.logger import ExperimentLogger
 from src.util.plot.opera import plot_opera_16hr
-from src.util.eval_metrics import mean_csi, mean_f1, mean_crps, BinnedEvalMetric
+from src.util.eval_metrics import mean_csi, mean_f1, mean_crps, BinnedEvalMetric, Evaluator
 from src.util.scale import scale_zero_to_one, undo_scale_zero_to_one
 
 
 def ddp_setup(rank: int, world_size: int) -> None:
     os.environ["MASTER_ADDR"] = "localhost"
-    os.environ["MASTER_PORT"] = "12355"
+    os.environ["MASTER_PORT"] = str(random.randint(10000, 20000))
     torch.cuda.set_device(rank)
     init_process_group(backend="nccl", rank=rank, world_size=world_size)
 
@@ -122,14 +122,14 @@ def train(
     ds: Sat2RadDataset = train_dataloader.dataset
     freqs              = torch.tensor(ds.y_reg_norm_bin_counts)
     freqs              += (1) # no zero weights
-    rel_freqs          = (freqs / freqs.sum())
+    rel_freqs          = 1 / (freqs / freqs.sum())
     
     # not really a PDF; sum is ~1.18
     rel_freqs          = (rel_freqs - rel_freqs.min()) / (rel_freqs.max() - rel_freqs.min())
-    weights            = 1 - rel_freqs
-    b_crps             = BinnedEvalMetric(mean_crps, weights)
-    b_f1               = BinnedEvalMetric(mean_f1, weights)
-    b_csi              = BinnedEvalMetric(mean_csi, weights)
+    weights            = rel_freqs
+    b_crps             = BinnedEvalMetric(mean_crps, weights).cuda(rank)
+    b_f1               = BinnedEvalMetric(mean_f1, weights).cuda(rank)
+    b_csi              = BinnedEvalMetric(mean_csi, weights).cuda(rank)
 
     # ---------- training loop ----------
     for epoch in range(num_epochs):

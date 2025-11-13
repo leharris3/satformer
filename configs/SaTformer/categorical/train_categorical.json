@@ -1,7 +1,7 @@
 {
   "global": {
     "num_epochs": 200,
-    "device": [0],
+    "device": [4],
     "world_size": 1
   },
   "model": {
@@ -18,7 +18,8 @@
       "dim_head": 64,
       "attn_dropout": 0.1,
       "ff_dropout": 0.1,
-      "rotary_emb": false
+      "rotary_emb": false,
+      "attn": "ST"
     },
     "weights": null
   },
@@ -50,8 +51,7 @@
       "kwargs": {
         "batch_size": 128,
         "shuffle": false,
-        "num_workers": 16,
-        "pin_memory": false
+        "num_workers": 16
       }
     },
     "val": {
@@ -75,10 +75,10 @@
   },
   "logging": {
     "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
-    "exp_name": "SaTformer-cat-loss-weightedCCE-sum-[0-1]-lr=1e-5-BS=128-N=64-no-pre-train",
+    "exp_name": "SaTformer-cat-loss-weightedCCE-lr=1e-5-BS=128-N=64-ATTN=2*(S+T)",
     "log_interval": 100,
     "wandb": {
-      "log": false,
+      "log": true,
       "api_key": "3d8c09b359c1abc995fd03c27398c41afce857c1",
       "save_figure_step": 100
     }

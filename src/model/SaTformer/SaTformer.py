@@ -189,7 +189,8 @@ class SaTformer(nn.Module):
         attn_dropout = 0.1,
         ff_dropout   = 0.1,
         rotary_emb   = True,
-        shift_tokens = False
+        shift_tokens = False,
+        attn="ST"
     ):
         super().__init__()
         assert image_size % patch_size == 0, 'Image dimensions must be divisible by the patch size.'
@@ -197,6 +198,8 @@ class SaTformer(nn.Module):
         num_patches   = (image_size // patch_size) ** 2
         num_positions = num_frames * num_patches
         patch_dim     = channels   * patch_size ** 2
+
+        self.attn = attn
 
         self.heads              = heads
         self.patch_size         = patch_size
@@ -216,21 +219,55 @@ class SaTformer(nn.Module):
         for _ in range(depth):
 
             ff           = FeedForward(dim, dropout = ff_dropout)
-            
-            # time_attn    = Attention(dim, dim_head = dim_head, heads = heads, dropout = attn_dropout)
-            # spatial_attn = Attention(dim, dim_head = dim_head, heads = heads, dropout = attn_dropout)
-            full_st_attn = Attention(dim, dim_head = dim_head, heads = heads, dropout = attn_dropout)
+
+            if self.attn == "T->S" or self.attn == "S->T":
+                time_attn    = Attention(dim, dim_head = dim_head, heads = heads, dropout = attn_dropout)
+                spatial_attn = Attention(dim, dim_head = dim_head, heads = heads, dropout = attn_dropout)
+            elif self.attn == "ST":
+                # NOTE: OURS
+                full_st_attn = Attention(dim, dim_head = dim_head, heads = heads, dropout = attn_dropout)
+            elif self.attn =="ST^2":
+                # NOTE: OURS
+                full_st_attn_1 = Attention(dim, dim_head = dim_head, heads = heads, dropout = attn_dropout)
+                full_st_attn_2 = Attention(dim, dim_head = dim_head, heads = heads, dropout = attn_dropout)
+            else:
+                raise Exception()
 
             if shift_tokens:
 
-                # time_attn, spatial_attn, ff = map(lambda t: PreTokenShift(num_frames, t), (time_attn, spatial_attn, ff))
-                full_st_attn, ff = map(lambda t: PreTokenShift(num_frames, t), (full_st_attn, ff))
+                if self.attn == "T->S" or self.attn == "S->T":
+                    time_attn, spatial_attn, ff = map(lambda t: PreTokenShift(num_frames, t), (time_attn, spatial_attn, ff))
+                elif self.attn == "ST":
+                    # NOTE: OURS
+                    full_st_attn, ff = map(lambda t: PreTokenShift(num_frames, t), (full_st_attn, ff))
+                elif self.attn =="ST^2":
+                    # NOTE: OURS
+                    full_st_attn_1, ff = map(lambda t: PreTokenShift(num_frames, t), (full_st_attn_1, ff))
+                    full_st_attn_2, ff = map(lambda t: PreTokenShift(num_frames, t), (full_st_attn_2, ff))
+                else:
+                    raise Exception()
 
-            # time_attn, spatial_attn, ff     = map(lambda t: PreNorm(dim, t), (time_attn, spatial_attn, ff))
-            full_st_attn, ff = map(lambda t: PreNorm(dim, t), (full_st_attn, ff))
+            if self.attn == "T->S" or self.attn == "S->T":
+                time_attn, spatial_attn, ff     = map(lambda t: PreNorm(dim, t), (time_attn, spatial_attn, ff))
+            elif self.attn == "ST":
+                # NOTE: OURS)
+                full_st_attn, ff = map(lambda t: PreNorm(dim, t), (full_st_attn, ff))
+            elif self.attn =="ST^2":
+                # NOTE: OURS)
+                full_st_attn_1, ff = map(lambda t: PreNorm(dim, t), (full_st_attn_1, ff))
+                full_st_attn_2, ff = map(lambda t: PreNorm(dim, t), (full_st_attn_2, ff))
+            else:
+                raise Exception()
 
-            # self.layers.append(nn.ModuleList([time_attn, spatial_attn, ff]))
-            self.layers.append(nn.ModuleList([full_st_attn, ff]))
+            if self.attn == "T->S" or self.attn == "S->T":
+                self.layers.append(nn.ModuleList([time_attn, spatial_attn, ff]))
+            elif self.attn == "ST":
+                # NOTE: OURS
+                self.layers.append(nn.ModuleList([full_st_attn, ff]))
+            elif self.attn =="ST^2":
+                # NOTE: OURS
+                self.layers.append(nn.ModuleList([full_st_attn_1, full_st_attn_2, ff]))
+                raise Exception()
 
         self.to_out = nn.Sequential(
             nn.LayerNorm(dim),
@@ -279,17 +316,52 @@ class SaTformer(nn.Module):
             cls_attn_mask = repeat(mask,          'b f -> (b h) () (f n)', n = n, h = self.heads)
             cls_attn_mask = F.pad(cls_attn_mask, (1, 0), value = True)
 
-        # time and space attention
-        # TODO: implement full ST attention
-        for (full_st_attention, ff) in self.layers:
+        if self.attn == "T->S" or self.attn == "S->T":
+            for (time_attn, spatial_attn, ff) in self.layers:
+                if self.attn == "T->S":
+                    x = time_attn(x, 'b (f n) d', '(b n) f d', n = n, mask = frame_mask, cls_mask = cls_attn_mask, rot_emb = frame_pos_emb) + x
+                    x = spatial_attn(x, 'b (f n) d', '(b f) n d', f = f, cls_mask = cls_attn_mask, rot_emb = image_pos_emb) + x
+                else:
+                    x = spatial_attn(x, 'b (f n) d', '(b f) n d', f = f, cls_mask = cls_attn_mask, rot_emb = image_pos_emb) + x
+                    x = time_attn(x, 'b (f n) d', '(b n) f d', n = n, mask = frame_mask, cls_mask = cls_attn_mask, rot_emb = frame_pos_emb) + x
+                x = ff(x) + x
+        elif self.attn == "ST":
+            for (full_st_attention, ff) in self.layers:
+                # NOTE: ours
+                # simply don't rearrange dims
+                x = full_st_attention(x, 'b (f n) d', 'b (f n) d', n = n, mask = frame_mask, cls_mask = cls_attn_mask, rot_emb = frame_pos_emb) + x
+        elif self.attn =="ST^2":
+            # time and space attention
+            # NOTE: ours
+            for (full_st_attention_1, full_st_attention_2, ff) in self.layers:
+                # simply don't rearrange dims
+                x = full_st_attention_1(x, 'b (f n) d', 'b (f n) d', n = n, mask = frame_mask, cls_mask = cls_attn_mask, rot_emb = frame_pos_emb) + x
+                x = full_st_attention_2(x, 'b (f n) d', 'b (f n) d', n = n, mask = frame_mask, cls_mask = cls_attn_mask, rot_emb = frame_pos_emb) + x
+                x = ff(x) + x # skip
 
-            # x = time_attn(   x, 'b (f n) d', '(b n) f d', n = n, mask = frame_mask, cls_mask = cls_attn_mask, rot_emb = frame_pos_emb) + x
-            # x = spatial_attn(x, 'b (f n) d', '(b f) n d', f = f,                    cls_mask = cls_attn_mask, rot_emb = image_pos_emb) + x
+        # # time and space attention
+        # # NOTE: ours
+        # for (full_st_attention, ff) in self.layers:
+
+        #     # x = time_attn(   x, 'b (f n) d', '(b n) f d', n = n, mask = frame_mask, cls_mask = cls_attn_mask, rot_emb = frame_pos_emb) + x
+        #     # x = spatial_attn(x, 'b (f n) d', '(b f) n d', f = f,                    cls_mask = cls_attn_mask, rot_emb = image_pos_emb) + x
             
-            # simply don't rearrange dims
-            x = full_st_attention(x, 'b (f n) d', 'b (f n) d', n = n, mask = frame_mask, cls_mask = cls_attn_mask, rot_emb = frame_pos_emb) + x
+        #     # NOTE: ours
+        #     # simply don't rearrange dims
+        #     x = full_st_attention(x, 'b (f n) d', 'b (f n) d', n = n, mask = frame_mask, cls_mask = cls_attn_mask, rot_emb = frame_pos_emb) + x
+        #     x = ff(x) + x # skip
 
-            x = ff(x) + x # skip
+        # # time -> space attention
+        # for (time_attn, spatial_attn, ff) in self.layers:
+        #     x = time_attn(x, 'b (f n) d', '(b n) f d', n = n, mask = frame_mask, cls_mask = cls_attn_mask, rot_emb = frame_pos_emb) + x
+        #     x = spatial_attn(x, 'b (f n) d', '(b f) n d', f = f, cls_mask = cls_attn_mask, rot_emb = image_pos_emb) + x
+        #     x = ff(x) + x
+
+        # # space -> time attention
+        # for (time_attn, spatial_attn, ff) in self.layers:
+        #     x = spatial_attn(x, 'b (f n) d', '(b f) n d', f = f, cls_mask = cls_attn_mask, rot_emb = image_pos_emb) + x
+        #     x = time_attn(x, 'b (f n) d', '(b n) f d', n = n, mask = frame_mask, cls_mask = cls_attn_mask, rot_emb = frame_pos_emb) + x
+        #     x = ff(x) + x
 
         cls_token = x[:, 0]
         return self.to_out(cls_token)
