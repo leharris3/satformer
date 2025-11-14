@@ -1,4 +1,4 @@
-# A deep space-time network for extreme precipitation forecasting
+# A Space-Time Transformer for Precipitation Forecasting
 ---
 
 **Levi Harris**, Tianlong Chen
