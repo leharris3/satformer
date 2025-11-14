@@ -267,7 +267,7 @@ class SaTformer(nn.Module):
             elif self.attn =="ST^2":
                 # NOTE: OURS
                 self.layers.append(nn.ModuleList([full_st_attn_1, full_st_attn_2, ff]))
-                raise Exception()
+            else: raise Exception()
 
         self.to_out = nn.Sequential(
             nn.LayerNorm(dim),

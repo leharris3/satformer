@@ -1,8 +1,8 @@
-export CUDA_VISIBLE_DEVICES=4,5,6,7
+export CUDA_VISIBLE_DEVICES=2,3,4,5,6,7
 
 LOGS_DIR=__exps__/__logs__
 EXP_ROOT_DIR=__exps__/test
-EXP_NAME="SaTformer-cat-loss-weightedCCE-lr=1e-5-BS=128-N=64-ATTN=2*(S+T)"
+EXP_NAME="SaTformer-cat-loss-CCE-lr=1e-5-BS=128-N=64-ATTN=ST^2-baseline"
 
 CONFIG_FP="/playpen-ssd/levi/w4c/w4c-25/configs/SaTformer/categorical/train_categorical.json"
 

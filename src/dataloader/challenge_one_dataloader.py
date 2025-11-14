@@ -2,7 +2,10 @@ import os
 import math
 import torch
 import sys
+
 import random
+random.seed(42)
+
 import warnings
 import numpy as np
 import xarray as xr

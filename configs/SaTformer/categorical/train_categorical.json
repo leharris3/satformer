@@ -1,7 +1,7 @@
 {
   "global": {
     "num_epochs": 200,
-    "device": [4],
+    "device": [2],
     "world_size": 1
   },
   "model": {
@@ -19,7 +19,7 @@
       "attn_dropout": 0.1,
       "ff_dropout": 0.1,
       "rotary_emb": false,
-      "attn": "ST"
+      "attn": "ST^2"
     },
     "weights": null
   },
@@ -65,17 +65,17 @@
   },
   "loss": {
     "train": {
-      "target": "src.util.loss.ClassWeightedCategoricalCrossEntropy",
-      "kwargs": {"n_classes": 64}
+      "target": "src.util.loss.CategoricalCrossEntropy",
+      "kwargs": {}
     },
     "val": {
-      "target": "src.util.loss.ClassWeightedCategoricalCrossEntropy",
-      "kwargs": {"n_classes": 64}
+      "target": "src.util.loss.CategoricalCrossEntropy",
+      "kwargs": {}
     }
   },
   "logging": {
     "root": "/playpen-ssd/levi/w4c/w4c-25/__exps__",
-    "exp_name": "SaTformer-cat-loss-weightedCCE-lr=1e-5-BS=128-N=64-ATTN=2*(S+T)",
+    "exp_name": "SaTformer-cat-loss-CCE-lr=1e-5-BS=128-N=64-ATTN=ST^2-baseline",
     "log_interval": 100,
     "wandb": {
       "log": true,

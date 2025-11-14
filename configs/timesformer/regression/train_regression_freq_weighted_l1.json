@@ -1,4 +1,4 @@
-{
+ {
   "global": {
     "num_epochs": 200,
     "device": 3

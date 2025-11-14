@@ -92,11 +92,11 @@ class ClassWeightedCategoricalCrossEntropy(nn.Module):
         freqs        = ClassWeightedCategoricalCrossEntropy.calculate_freqs(n_classes)
         freqs       += (1) # no zero weights
 
-        # log weights
-        rel_freqs    =  1 / (freqs / freqs.sum())
-        rel_freqs    = (rel_freqs - rel_freqs.min()) / (rel_freqs.max() - rel_freqs.min())
-
+        # HACK: log weights
+        rel_freqs    =  -torch.log((freqs / freqs.sum()))
+        # rel_freqs    = (rel_freqs - rel_freqs.min()) / (rel_freqs.max() - rel_freqs.min())
         # rel_freqs    = rel_freqs.clip(.1, 1.)
+        
         self.weights = rel_freqs
 
     @staticmethod
