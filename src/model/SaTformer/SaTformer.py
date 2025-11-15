@@ -3,7 +3,7 @@ import torch.nn.functional as F
 
 from torch import nn, einsum
 from einops import rearrange, repeat
-from src.model.timesformer.rotary import apply_rot_emb, AxialRotaryEmbedding, RotaryEmbedding
+from src.model.SaTformer.rotary import apply_rot_emb, AxialRotaryEmbedding, RotaryEmbedding
 
 
 # helpers

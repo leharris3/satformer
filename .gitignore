@@ -12,5 +12,6 @@ __exps__
 tiny-exp
 weather4cast_data
 wandb
+weights
 
 **.log

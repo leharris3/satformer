@@ -9,12 +9,26 @@ Levi Harris, Tianlong Chen
 
 > [Google Drive](https://drive.google.com/drive/folders/1KOeIE1M5zVCTtmFwbAQH9yUo9vI_bbFk?usp=sharing)
 
+*Download the weights above, then drag and drop the `weights` folder into this repo to use the code below as is.*
+
+```
+* src
+* weights
+    - sf-64-cls.pt
+```
+
 ### Demo
 
 ```python
 import torch
-from src.model.SaTformer.SaTformer import SaTformer
+import warnings
 
+from src.model.SaTformer.SaTformer import SaTformer
+from src.dataloader.challenge_one_dataloader import Sat2RadDataset
+
+# quiet some annoying UserWarnings thrown by xarray 
+# when opening datasets with phony_dims=None
+warnings.simplefilter("ignore")
 
 model = SaTformer(
     dim=512,
@@ -32,14 +46,18 @@ model = SaTformer(
     attn="ST^2"
 )
 
+# NOTE: change to the path of YOUR model weights
 WEIGHTS_FP = "weights/sf-64-cls.pt"
 
 model.load_state_dict(torch.load(WEIGHTS_FP, weights_only=True), strict=False);
 model.eval()
 
-# predict using a randomly generated HRIT sequence
-HRIT_dummy_input = torch.rand(1, 4, 11, 32, 32)
 with torch.no_grad():
-    y = model(HRIT_dummy_input)
-    print(y.shape)
+    inputs = torch.rand(1, 4, 11, 32, 32) # randomly generated HRIT input
+    logits = model(inputs)                # call model forward pass
+    print(logits.shape)                   # -> [1, 64]; raw model probs over output classes
 ```
+
+![/assets/over-under-pred.png](/assets/over-under-pred.png)
+
+*Model predicted cumulative mass function (CMF) for a random input.*

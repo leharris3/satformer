@@ -1,7 +1,6 @@
 import warnings
-from pydantic.warnings import UnsupportedFieldAttributeWarning
 
-from eval import Sat2RadDataset
+from pydantic.warnings import UnsupportedFieldAttributeWarning
 warnings.simplefilter("ignore", UnsupportedFieldAttributeWarning)
 
 import os
