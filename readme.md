@@ -1,9 +1,14 @@
 # A Space-Time Transformer for Precipitation Forecasting
 ---
 
-**Levi Harris**, Tianlong Chen
-
+Levi Harris, Tianlong Chen
 *The Unviersity of North Carolina at Chapel Hill*
+
+### Weights
+
+> [Google Drive](https://drive.google.com/drive/folders/1KOeIE1M5zVCTtmFwbAQH9yUo9vI_bbFk?usp=sharing)
+
+### Demo
 
 ```python
 import torch
