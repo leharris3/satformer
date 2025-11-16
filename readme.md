@@ -14,10 +14,14 @@ Levi Harris, Tianlong Chen
 ```
 * src
 * weights
-    - sf-64-cls.pt
+    * sf-64-cls.pt
 ```
 
 ### Demo
+
+```python
+pip install torch einops
+```
 
 ```python
 import torch
