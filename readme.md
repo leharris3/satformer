@@ -64,7 +64,11 @@ with torch.no_grad():
     print(logits.shape)                   # -> [1, 64]; raw model probs over output classes
 ```
 
+***
+
 ![/assets/over-under-pred.png](/assets/over-under-pred.png)
+
+*Model predicted cumulative mass function (CMF) for a random input.*
 
 ### Citation
 
@@ -78,5 +82,3 @@ If you use this code in your research, please cite:
   year={2025}
 }
 ```
-
-*Model predicted cumulative mass function (CMF) for a random input.*
