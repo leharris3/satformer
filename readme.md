@@ -1,7 +1,7 @@
 # A Space-Time Transformer for Precipitation Forecasting
 ---
 
-[![arXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)]([https://arxiv.org/abs/2507.13527v1](https://www.arxiv.org/abs/2511.11090)) [![NeurIPS](https://img.shields.io/badge/NeurIPS_2025-🏆_1st_Place_CUMSUM-4b44ce.svg)](https://neurips.cc/virtual/2025/loc/san-diego/135896)
+[![arXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2511.11090) [![NeurIPS](https://img.shields.io/badge/NeurIPS_2025-🏆_1st_Place_CUMSUM-4b44ce.svg)](https://neurips.cc/virtual/2025/loc/san-diego/135896)
 
 Levi Harris, Tianlong Chen
 
