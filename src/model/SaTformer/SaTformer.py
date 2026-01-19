@@ -1,3 +1,11 @@
+# Adapted from TimeSformer-pytorch by Phil Wang (lucidrains)
+# https://github.com/lucidrains/TimeSformer-pytorch
+# Licensed under MIT License
+#
+# Source files:
+#   - timesformer_pytorch/timesformer_pytorch.py
+#   - timesformer_pytorch/rotary.py
+
 import torch
 import torch.nn.functional as F
 
