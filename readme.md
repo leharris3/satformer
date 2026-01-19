@@ -66,4 +66,17 @@ with torch.no_grad():
 
 ![/assets/over-under-pred.png](/assets/over-under-pred.png)
 
+### Citation
+
+If you use this code in your research, please cite:
+
+```bibtex
+@article{harris2025satformer,
+  title={A Space-Time Transformer for Precipitation Forecasting},
+  author={Harris, Levi and Chen, Tianlong},
+  journal={arXiv preprint arXiv:2511.11090},
+  year={2025}
+}
+```
+
 *Model predicted cumulative mass function (CMF) for a random input.*
