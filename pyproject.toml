@@ -1,0 +1,25 @@
+[project]
+name = "satformer"
+version = "0.1.0"
+description = "A Space-Time Transformer for Precipitation Forecasting"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "torch>=2.0",
+    "einops>=0.7",
+    "numpy>=1.26",
+    "scipy>=1.12",
+    "scikit-learn>=1.4",
+    "torchmetrics>=1.3",
+    "pandas>=2.2",
+    "matplotlib>=3.8",
+    "xarray>=2024.1",
+    "pyyaml>=6.0",
+    "wandb>=0.16",
+    "tqdm>=4.66",
+    "pydantic>=2.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

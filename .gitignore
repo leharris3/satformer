@@ -15,3 +15,7 @@ wandb
 weights
 
 **.log
+
+# uv / Python
+.venv/
+uv.lock

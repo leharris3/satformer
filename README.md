@@ -7,6 +7,38 @@ Levi Harris, Tianlong Chen
 
 *The University of North Carolina at Chapel Hill*
 
+### Getting Started
+
+This project uses [uv](https://docs.astral.sh/uv/) for dependency management.
+
+**Install uv** (if not already installed):
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Set up the project:**
+
+```bash
+# Clone the repository
+git clone https://github.com/your-username/satformer.git
+cd satformer
+
+# Create virtual environment and install dependencies
+uv sync
+```
+
+**Run scripts with uv:**
+
+```bash
+# Run Python scripts
+uv run python main.py
+
+# Or activate the environment first
+source .venv/bin/activate
+python main.py
+```
+
 ### Weights
 
 > [Google Drive](https://drive.google.com/drive/folders/1KOeIE1M5zVCTtmFwbAQH9yUo9vI_bbFk?usp=sharing)
@@ -22,17 +54,13 @@ Levi Harris, Tianlong Chen
 ### Demo
 
 ```python
-pip install torch einops
-```
-
-```python
 import torch
 import warnings
 
 from src.model.SaTformer.SaTformer import SaTformer
 from src.dataloader.challenge_one_dataloader import Sat2RadDataset
 
-# quiet some annoying UserWarnings thrown by xarray 
+# quiet some annoying UserWarnings thrown by xarray
 # when opening datasets with phony_dims=None
 warnings.simplefilter("ignore")
 
