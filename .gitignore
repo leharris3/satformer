@@ -1,6 +1,7 @@
-___old___
-__pycache__
+**__pycache__**
+**.log
 
+___old___
 __sparse-cafm
 __ccrfcd-gauge-grids
 __SmaAt-UNet
@@ -9,13 +10,13 @@ __TimeSformer-pytorch
 __repos__
 __exps__
 
-tiny-exp
-weather4cast_data
 wandb
 weights
+tiny-exp
+lightning_logs
+weather4cast_data
 
-**.log
-
-# uv / Python
-.venv/
 uv.lock
+
+.venv
+.claude

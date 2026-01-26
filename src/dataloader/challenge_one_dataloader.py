@@ -19,45 +19,49 @@ from torch.utils.data import Dataset
 from concurrent.futures import ThreadPoolExecutor
 
 from src.util.scale import scale_zero_to_one
-from src.dataloader.dataset_stats import X_MIN, X_MAX, Y_REG_MIN, Y_REG_MAX, Y_REG_NORM_MAX
+from src.dataloader.dataset_stats import (
+    X_MIN, X_MAX, Y_REG_MIN, Y_REG_MAX, Y_REG_NORM_MAX,
+    Y_REG_NORM_BINS, Y_REG_FREQ_BINS
+)
 
 
-# quite some annoying UserWarnings thrown by xarray 
+# quiet some annoying UserWarnings thrown by xarray
 # when opening datasets with phony_dims=None
 warnings.simplefilter("ignore")
 
 
-WFC_ROOT_DIR    = "/playpen-ssd/levi/w4c/w4c-25/weather4cast_data"
-WFC_C1_TEST_DIR = "/playpen-ssd/levi/w4c/w4c-25/weather4cast_data/challenge_one"
-Y_REG_NORMS_FP  = "/playpen-ssd/levi/w4c/w4c-25/___old___/11-4-25-y_reg_norms.pth"
+# resolve paths relative to project root (parent of src/)
+_PROJECT_ROOT   = Path(__file__).resolve().parent.parent.parent
+WFC_ROOT_DIR    = str(_PROJECT_ROOT / "weather4cast_data")
+WFC_C1_TEST_DIR = str(_PROJECT_ROOT / "weather4cast_data" / "challenge_one")
 
 
 def get_y_reg_bin_counts_step(n_classes: int):
+    """
+    Return bin edges, step size, and counts for y_reg_norm values.
+    Uses pre-computed statistics from dataset_stats.py.
+    """
+    # use pre-computed bins from dataset_stats (128 classes)
+    precomputed_bins   = Y_REG_NORM_BINS
+    precomputed_counts = torch.tensor(Y_REG_FREQ_BINS)
 
-    # emp distribution of train label values
-    y_regs:torch.Tensor  = torch.load(Y_REG_NORMS_FP)
-    data                 = y_regs.squeeze()
+    if n_classes == len(precomputed_bins):
+        y_reg_norm_bins       = precomputed_bins
+        y_reg_norm_bin_counts = precomputed_counts
+    else:
+        # recompute bins for different n_classes
+        y_reg_norm_bins       = torch.arange(0, Y_REG_NORM_MAX, Y_REG_NORM_MAX / n_classes)
+        # interpolate/rebin the pre-computed frequency distribution
+        y_reg_norm_bin_counts = torch.zeros(n_classes)
+        scale = len(precomputed_counts) / n_classes
+        for i in range(n_classes):
+            start_idx = int(i * scale)
+            end_idx   = int((i + 1) * scale)
+            y_reg_norm_bin_counts[i] = precomputed_counts[start_idx:end_idx].sum()
 
-    # [N_classes]
-    y_reg_norm_bins = torch.arange(0, data.max(), data.max() / n_classes)
-    freq            = torch.zeros(y_reg_norm_bins.shape)
+    y_reg_norm_bin_step = Y_REG_NORM_MAX / n_classes
 
-    for i, _bin in enumerate(y_reg_norm_bins):
-
-        start = _bin
-        if i <= (len(y_reg_norm_bins) - 2):
-            end = y_reg_norm_bins[i+1]
-        else:
-            end = sys.maxsize - 1
-
-        # num samples/bin
-        count   = ((data >= start) & (data < end)).sum()
-        freq[i] = count
-    
-    y_reg_norm_bin_step   = Y_REG_NORM_MAX / n_classes
-    y_reg_norm_bin_counts = freq
-    
-    # to avoid any divide by zero errors when calculating pmfs
+    # avoid divide by zero errors when calculating pmfs
     y_reg_norm_bin_counts += 1
 
     return y_reg_norm_bins, y_reg_norm_bin_step, y_reg_norm_bin_counts
