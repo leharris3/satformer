@@ -1,4 +1,4 @@
-# A Space-Time Transformer for Precipitation Forecasting
+# A Space-Time Transformer for Precipitation Nowcasting
 ---
 
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2511.11090) [![NeurIPS](https://img.shields.io/badge/NeurIPS_2025-🏆_1st_Place_CUMSUM-4b44ce.svg)](https://neurips.cc/virtual/2025/loc/san-diego/135896)
@@ -7,32 +7,37 @@ Levi Harris, Tianlong Chen
 
 *The University of North Carolina at Chapel Hill*
 
+### Setup
+
+This project uses [uv](https://docs.astral.sh/uv/) for dependency management.
+
+```bash
+# install uv (if you don't have it)
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# sync dependencies
+uv sync
+```
+
 ### Weights
 
-> [Google Drive](https://drive.google.com/drive/folders/1KOeIE1M5zVCTtmFwbAQH9yUo9vI_bbFk?usp=sharing)
+Download pretrained weights from [HuggingFace](https://huggingface.co/leharris3/satformer):
 
-*Download the weights above, then drag and drop the `weights` folder into this repo to use the code below as is.*
-
-```
-* src
-* weights
-    * sf-64-cls.pt
+```python
+from huggingface_hub import hf_hub_download
+hf_hub_download(repo_id="leharris3/satformer", filename="sf-64-cls.pt", local_dir="weights")
 ```
 
 ### Demo
 
 ```python
-pip install torch einops
-```
-
-```python
 import torch
 import warnings
 
+from huggingface_hub import hf_hub_download
 from src.model.SaTformer.SaTformer import SaTformer
-from src.dataloader.challenge_one_dataloader import Sat2RadDataset
 
-# quiet some annoying UserWarnings thrown by xarray 
+# quiet some annoying UserWarnings thrown by xarray
 # when opening datasets with phony_dims=None
 warnings.simplefilter("ignore")
 
@@ -52,8 +57,7 @@ model = SaTformer(
     attn="ST^2"
 )
 
-# NOTE: change to the path of YOUR model weights
-WEIGHTS_FP = "weights/sf-64-cls.pt"
+WEIGHTS_FP = hf_hub_download(repo_id="leharris3/satformer", filename="sf-64-cls.pt")
 
 model.load_state_dict(torch.load(WEIGHTS_FP, weights_only=True), strict=False);
 model.eval()
@@ -66,9 +70,29 @@ with torch.no_grad():
 
 ***
 
-![/assets/over-under-pred.png](/assets/over-under-pred.png)
+<p align="center">
+  <img src="/assets/over-under-pred.png" width="600">
+  <br>
+  <em>Model predicted cumulative mass function (CMF) for a random input.</em>
+</p>
 
-*Model predicted cumulative mass function (CMF) for a random input.*
+### Repository Structure
+
+```
+satformer/
+├── train.py                    # training entrypoint
+├── test.py                     # inference entrypoint
+├── demo.ipynb                  # interactive demo notebook
+├── configs/                    # training & test configs
+├── scripts/                    # launcher scripts
+└── src/
+    ├── model/
+    │   └── SaTformer/
+    │       ├── SaTformer.py    # model architecture
+    │       └── rotary.py       # rotary positional embeddings
+    ├── dataloader/             # dataset & preprocessing
+    └── util/                   # losses, metrics, logging, plotting
+```
 
 ### Citation
 

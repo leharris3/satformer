@@ -15,3 +15,6 @@ wandb
 weights
 
 **.log
+**.pt
+
+.venv

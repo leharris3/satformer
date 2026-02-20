@@ -1,0 +1,21 @@
+[project]
+name = "satformer"
+version = "0.1.0"
+description = "A Space-Time Transformer for Precipitation Nowcasting"
+requires-python = ">=3.11"
+dependencies = [
+    "torch>=2.0.0",
+    "einops",
+    "numpy",
+    "pandas",
+    "xarray",
+    "scipy",
+    "scikit-learn",
+    "torchmetrics",
+    "matplotlib",
+    "tqdm",
+    "pydantic",
+    "pyyaml",
+    "wandb",
+    "huggingface_hub",
+]
