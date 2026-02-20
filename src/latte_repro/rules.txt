@@ -1,0 +1,7 @@
+1. Can not copy/paste any code from external sources.
+2. Can not view the Latte repository or any other LDM/DM repos at any point.
+3. Can only use checkpointed/existing implementations of components
+(e.g., VAE-encoder) after **successfully implementing** a similar component from scratch
+4. No AI/stack-exchange
+5. Papers/scholarly sources only
+6. Can only have two tabs open (a paper/primary resouce + 1 code tab) every 30 min
